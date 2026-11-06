@@ -1,0 +1,8 @@
+[provider]
+kind = "openai"
+base_url = "http://127.0.0.1:38411/v1"
+model = "mock-model"
+api_key = "mock-key"
+
+[capture]
+backend = "gnome"

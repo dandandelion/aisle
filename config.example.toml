@@ -1,0 +1,36 @@
+# Copy to ~/.config/sideagent/config.toml and chmod 600.
+# Fields per docs/spec.md §9.4.
+
+[provider]
+kind = "openai"                      # "openai" (compatible) | "anthropic"
+# base_url = "https://api.openai.com/v1"
+model = "gpt-4o"
+api_key = "sk-..."
+
+# Optional extra providers, selectable per request with --provider NAME
+# [provider.named.ollama]
+# kind = "openai"
+# base_url = "http://localhost:11434/v1"
+# model = "qwen2.5vl:7b"
+# api_key = "ollama"
+
+# [provider.named.claude]
+# kind = "anthropic"
+# model = "claude-sonnet-4-5"
+# api_key = "sk-ant-..."
+
+[capture]
+backend = "auto"                     # auto | gnome | grim | none
+
+[ui]
+preferred_frontend = "auto"          # auto | extension | gtk
+panel_width = 420
+
+[hotkey]
+toggle = "super+shift+a"
+attach = "super+shift+s"
+
+[image]
+max_edge = 1568
+jpeg_quality = 85
+keep_images_last = 2

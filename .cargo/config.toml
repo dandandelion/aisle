@@ -1,0 +1,10 @@
+# Keep build artifacts on a leash: this box is shared, limit parallelism.
+[build]
+jobs = 6
+
+# Bypass ccache: its default dir (~/.cache/ccache) is read-only in this
+# sandbox. Real gcc keeps builds working without caching.
+[env]
+CC = "/usr/bin/gcc"
+CXX = "/usr/bin/g++"
+AR = "/usr/bin/ar"

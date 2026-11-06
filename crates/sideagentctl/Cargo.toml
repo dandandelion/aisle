@@ -1,0 +1,13 @@
+[package]
+name = "sideagentctl"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+agent-core.workspace = true
+tokio.workspace = true
+zbus.workspace = true
+clap.workspace = true
+anyhow.workspace = true
+futures.workspace = true

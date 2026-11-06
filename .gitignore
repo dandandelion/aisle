@@ -1,0 +1,5 @@
+/target
+/.toolchain
+/config.toml
+*.png
+!docs/**/*.png
