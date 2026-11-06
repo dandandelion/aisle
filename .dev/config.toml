@@ -5,4 +5,4 @@ model = "mock-model"
 api_key = "mock-key"
 
 [capture]
-backend = "gnome"
+backend = "file:/home/dandandelion/Projects/sideagent/.dev/testscreen.png"

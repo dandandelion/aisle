@@ -185,7 +185,7 @@ backend that answers a cheap probe.
 
 | Backend | How | Prompt? | Notes |
 |---|---|---|---|
-| gnome-shell | `org.gnome.Shell.Screenshot.Screenshot` → tmp PNG in `$XDG_RUNTIME_DIR/sideagent/` | **no** | Works under Wayland and X11 sessions. The one caveat: XWayland-only clients see nothing useful — we never rely on it. |
+| gnome-shell | `org.gnome.Shell.Screenshot.Screenshot` → tmp PNG in `$XDG_RUNTIME_DIR/sideagent/` | **no — but restricted** | **GNOME ≥ ~47 restricts this API to the shell/portal itself (AccessDenied for third-party callers); verified on GNOME 50.6.** Backend kept for GNOME 40–46 and X11 sessions. On modern GNOME the prompt-free capture path is the Tier A extension (in-shell, writes the PNG and hands it to the daemon via `Ask{screenshot_path}`) or the portal (prompts). |
 | kwin | `org.kde.kwin.Screenshot` (Plasma 6 interface; version-probe) | **no** | Fallback: `spectacle -b -n -o` CLI. |
 | wlroots | spawn `grim -` (or wlr-screencopy client lib later) | **no** | grim is a hard dep on these DEs; document it. |
 | X11 | xcb: root window + composite redirect via `XGetImage`/`xcomposite` | **no** | Unredirected fullscreen games may capture black — acceptable v1. |

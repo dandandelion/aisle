@@ -17,13 +17,13 @@ pub struct GnomeShell;
     default_path = "/org/gnome/Shell/Screenshot"
 )]
 trait GnomeScreenshot {
+    // introspected signature: (include_cursor, flash, filename) -> (success, filename_used)
     fn screenshot(
         &self,
-        width: i32,
-        height: i32,
         include_cursor: bool,
+        flash: bool,
         filename: &str,
-    ) -> zbus::Result<bool>;
+    ) -> zbus::Result<(bool, String)>;
 }
 
 fn runtime_dir() -> PathBuf {
@@ -57,9 +57,8 @@ impl ScreenCapture for GnomeShell {
         std::fs::create_dir_all(&dir).map_err(|e| Error::Capture(e.to_string()))?;
         let file = dir.join(format!("cap-{}.png", uuid::Uuid::new_v4()));
 
-        // 0,0 = current output, full size (gnome-shell convention)
-        let ok = proxy
-            .screenshot(0, 0, false, file.to_str().unwrap_or_default())
+        let (ok, _uri) = proxy
+            .screenshot(false, false, file.to_str().unwrap_or_default())
             .await
             .map_err(|e| Error::Capture(format!("screenshot call: {e}")))?;
         if !ok {

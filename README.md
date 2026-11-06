@@ -35,7 +35,7 @@ other OSes later" an honest statement rather than a hope.
 
 | Environment | Overlay | Global hotkey | Screenshot |
 |---|---|---|---|
-| GNOME (Wayland/X11) | Shell extension (native stage overlay) | extension keybinding | `org.gnome.Shell.Screenshot` (no prompt) |
+| GNOME (Wayland/X11) | Shell extension (native stage overlay) | extension keybinding | in-shell capture (≥47 locks the D-Bus screenshot API from apps) |
 | KDE Plasma (Wayland/X11) | GTK4 + `gtk4-layer-shell` | portal `GlobalShortcuts` / user shortcut | `org.kde.kwin.Screenshot` |
 | wlroots — Sway, Hyprland, Wayfire | GTK4 + `gtk4-layer-shell` | compositor keybind / portal `GlobalShortcuts` | `grim` (wlr-screencopy) |
 | X11 window managers — i3, bspwm, openbox, awesome | GTK4 X11 window (`keep-above` + sticky + positioned) | daemon `XGrabKey` (xcb) | xcb root-window capture |

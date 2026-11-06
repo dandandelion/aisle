@@ -1,6 +1,7 @@
 //! Screen capture backends (spec §7). Compositor-native, prompt-free APIs
 //! first; portal last. Autodetect order: gnome → kwin → grim → x11 → portal.
 
+pub mod file;
 pub mod gnome;
 pub mod grim;
 
@@ -37,6 +38,10 @@ fn candidates() -> Vec<Arc<dyn ScreenCapture>> {
 /// Resolve the configured backend ("auto" probes, others force).
 /// Selection is cached by the Agent on first use.
 pub async fn resolve(cfg: &CaptureSection) -> Vec<Arc<dyn ScreenCapture>> {
+    if let Some(f) = file::FileCapture::from_spec(&cfg.backend) {
+        tracing::warn!("capture backend: file (test mode) {}", f.path().display());
+        return vec![Arc::new(f)];
+    }
     match cfg.backend.as_str() {
         "none" => return vec![],
         "gnome" => return vec![Arc::new(gnome::GnomeShell)],

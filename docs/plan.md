@@ -120,6 +120,15 @@ image quirks (`/api/chat` native shape); macOS/Windows frontends.
 
 ---
 
+## Ordering amendment (M1 completion, 2026-11-07 04:22)
+
+M1 revealed that modern GNOME (verified on 50.6) denies `org.gnome.Shell.Screenshot`
+to third-party apps — prompt-free capture on GNOME *requires* the Tier A
+extension. M4 (extension) is therefore pulled **before** M2 (GTK app): the
+protocol rationale that put M2 first ("prove the protocol with a portable
+client") is already satisfied by `sideagentctl`, which exercises the full
+D-Bus API including signals. M2 follows as planned afterwards.
+
 ## Test strategy
 
 - **Unit:** context assembly (image policy!), pipeline (real PNG
