@@ -3,3 +3,6 @@
 /config.toml
 *.png
 !docs/**/*.png
+/.dev/*
+!/.dev/*.sh
+!/.dev/mockprovider.py
