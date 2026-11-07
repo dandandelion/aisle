@@ -19,6 +19,12 @@ systemctl --user daemon-reload
 systemctl --user enable --now sideagentd
 
 echo "==> gnome extension"
+# register the extension's gsettings schema in the user dir too, so
+# `gsettings set org.gnome.shell.extensions.sideagent ...` works from CLI
+mkdir -p "$HOME/.local/share/glib-2.0/schemas"
+cp extension/schemas/org.gnome.shell.extensions.sideagent.gschema.xml \
+   "$HOME/.local/share/glib-2.0/schemas/"
+glib-compile-schemas "$HOME/.local/share/glib-2.0/schemas"
 XDG_CACHE_HOME="${XDG_CACHE_HOME:-$PWD/.dev/cache}" gnome-extensions pack extension --force
 gnome-extensions install org.sideagent.shell-extension.zip --force || {
   echo "NOTE: extension installed on disk; GNOME loads new extensions at login."

@@ -60,6 +60,9 @@ sideagentctl ask --screen "what is this?" # terminal chat with screen context
 # overlay (GNOME extension — needs ONE logout for GNOME 50 to load it):
 gnome-extensions enable org.sideagent     # after next login
 # Super+Shift+A toggle · Super+Shift+S attach-screen · Esc close
+
+# live-tune the composer prompt (reopen panel to apply):
+gsettings set org.gnome.shell.extensions.sideagent prompt-y 6
 ```
 
 ## Documentation map
