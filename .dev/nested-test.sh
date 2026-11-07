@@ -20,6 +20,7 @@ python3 $S/.dev/mockprovider.py 38411 > $N/mock.log 2>&1 & MOCK=$!
 $S/target/debug/sideagentd > $N/daemon.log 2>&1 & D=$!
 sleep 1
 
+gsettings set org.gnome.desktop.interface text-scaling-factor 2
 gsettings set org.gnome.shell enabled-extensions "['org.sideagent']" || echo "WARN: gsettings failed"
 
 gnome-shell --headless --no-x11 --virtual-monitor 1280x800 > $N/shell.log 2>&1 & GS=$!

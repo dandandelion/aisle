@@ -117,17 +117,19 @@ class Panel {
         // (GNOME 50's St dropped multi-line text widgets; v1 input is
         // single-line. Multi-line is backlog.)
         const inputRow = new St.BoxLayout({ style_class: 'sideagent-input-row' });
-        this._prompt = new St.Label({ text: '❯', style_class: 'sideagent-prompt' });
-        inputRow.add_child(this._prompt);
         this._entry = new St.Entry({ style_class: 'sideagent-input', x_expand: true });
+        // prompt chevron as the entry's own primary icon: centered by
+        // St.Entry internals, correct at any HiDPI scale — no layout games
+        this._prompt = new St.Icon({
+            icon_name: 'go-next-symbolic',
+            icon_size: 18,
+            style_class: 'symbolic',
+            style_class: 'sideagent-prompt',
+        });
+        this._entry.set_primary_icon(this._prompt);
         this._entry.clutter_text.connect('activate', () => this._send());
         this._entry.connect('key-press-event', (_a, event) => this._onKeyPress(event));
         inputRow.add_child(this._entry);
-        this._prompt.add_constraint(new Clutter.AlignConstraint({
-            source: this._entry,
-            align_axis: Clutter.AlignAxis.Y_AXIS,
-            factor: 0.5,
-        }));
         this._root.add_child(inputRow);
 
         const hint = new St.Label({
@@ -505,7 +507,7 @@ class Panel {
 
 export default class SideagentExtension extends Extension {
     enable() {
-        log('sideagent: extension build 2026-11-07.1715');
+        log('sideagent: extension build 2026-11-07.1738');
         const width = this.getSettings().get_int('panel-width');
         this._panel = new Panel(width);
 
