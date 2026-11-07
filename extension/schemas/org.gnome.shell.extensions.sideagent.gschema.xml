@@ -14,7 +14,7 @@
       <summary>Prompt chevron icon size (px)</summary>
     </key>
     <key name="prompt-y" type="i">
-      <default>2</default>
+      <default>-2</default>
       <summary>Prompt chevron vertical nudge (+down / -up, px)</summary>
     </key>
     <key name="panel-width" type="i">
