@@ -114,9 +114,14 @@ Three tiers, picked per environment; the daemon is identical everywhere.
 ### Tier A — GNOME Shell extension (GNOME only)
 
 > **Verified on GNOME 50.6 (headless nested shell, 2026-11-07).**
-> **Hot-reload rules (learned the hard way):** an already-loaded extension
-> reloads its code via `gnome-extensions disable && enable`; a freshly
-> *installed* extension only appears at next login (no directory rescan).
+> **Reload rules (hard-won, corrected by build-marker forensics):** on
+> GNOME 50 *nothing* short of logout changes extension CODE — disable/enable
+> re-runs the cached module (verified: a new `enable()` log line never
+> appeared after install+disable+enable). New *installs* also only appear
+> at login (no directory rescan). Dev loop: iterate headless via
+> `.dev/nested-test.sh` (fresh shell each run = fresh code), then one
+> logout to apply to the live session. A `disable()` that throws leaves a
+> permanent ERROR zombie.
 > A `disable()` that throws mid-way leaves the extension in permanent
 > ERROR state (unrecoverable without logout) — so `destroy()`/`disable()`
 > must be paranoid (all API calls try/caught). Uninstall+reinstall does
