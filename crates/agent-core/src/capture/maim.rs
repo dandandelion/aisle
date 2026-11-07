@@ -26,7 +26,20 @@ impl ScreenCapture for Maim {
     }
 
     async fn probe(&self) -> bool {
-        std::env::var("DISPLAY").is_ok() && (have("maim") || have("import"))
+        // GNOME Wayland still exports DISPLAY=:0 (for XWayland apps); maim
+        // there captures only X clients (black desktop). Claim x11 sessions
+        // only: XDG_SESSION_TYPE must say x11, or be unset with no
+        // WAYLAND_DISPLAY around.
+        if !(have("maim") || have("import")) {
+            return false;
+        }
+        if std::env::var("WAYLAND_DISPLAY").is_ok() {
+            return false;
+        }
+        match std::env::var("XDG_SESSION_TYPE").as_deref() {
+            Ok(s) => s == "x11",
+            Err(_) => std::env::var("DISPLAY").is_ok(),
+        }
     }
 
     async fn capture(&self) -> Result<CapturedImage> {

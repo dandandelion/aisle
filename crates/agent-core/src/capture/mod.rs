@@ -5,6 +5,7 @@ pub mod file;
 pub mod gnome;
 pub mod grim;
 pub mod maim;
+pub mod portal;
 
 use std::sync::Arc;
 
@@ -34,6 +35,7 @@ fn candidates() -> Vec<Arc<dyn ScreenCapture>> {
         Arc::new(gnome::GnomeShell),
         Arc::new(grim::Grim),
         Arc::new(maim::Maim),
+        Arc::new(portal::Portal),
     ]
 }
 
@@ -49,6 +51,7 @@ pub async fn resolve(cfg: &CaptureSection) -> Vec<Arc<dyn ScreenCapture>> {
         "gnome" => return vec![Arc::new(gnome::GnomeShell)],
         "grim" => return vec![Arc::new(grim::Grim)],
         "x11" => return vec![Arc::new(maim::Maim)],
+        "portal" => return vec![Arc::new(portal::Portal)],
         _ => {}
     }
     let picked: Vec<Arc<dyn ScreenCapture>> =

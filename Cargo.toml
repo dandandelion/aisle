@@ -4,6 +4,7 @@ members = [
     "crates/agent-core",
     "crates/sideagentd",
     "crates/sideagentctl",
+    "crates/sideagent-gtk",
 ]
 
 [workspace.package]
