@@ -398,24 +398,46 @@ class Panel {
 
     // ---------- capture (in-shell, prompt-free) ----------
 
+    // Normal captures fade the panel out first, so the model receives the
+    // full desktop *including content underneath us* (context preservation).
+    // full=true (selftest artifacts) skips the fade for UI regression shots.
     async _capturePath({full = false} = {}) {
         promisifyScreenshot();
+        const hidden = !full && this._visible;
+        if (hidden)
+            await this._fadeSelf(false);
+        try {
+            return await this._captureInner();
+        } finally {
+            if (hidden)
+                await this._fadeSelf(true);
+        }
+    }
+
+    _fadeSelf(in_) {
+        return new Promise(resolve => {
+            this._root.save_easing_state();
+            this._root.set_easing_duration(in_ ? 160 : 60);
+            this._root.set_easing_mode(in_ ? Clutter.AnimationMode.EASE_OUT_QUAD
+                                           : Clutter.AnimationMode.LINEAR);
+            this._root.opacity = in_ ? 255 : 0;
+            this._root.restore_easing_state();
+            // let the compositor paint at least one frame in the new state
+            GLib.timeout_add(GLib.PRIORITY_DEFAULT, in_ ? 170 : 90, () => {
+                resolve();
+                return GLib.SOURCE_REMOVE;
+            });
+        });
+    }
+
+    async _captureInner() {
         const shooter = new Shell.Screenshot();
         const [content, scale] = await shooter.screenshot_stage_to_content();
         const texture = content.get_texture();
 
-        // Exclude our own panel from the capture: crop the stage to the area
-        // left of the panel (everything the user can see behind us). The
-        // panel never enters the image, so the model sees the desktop, not
-        // its own UI. Multi-monitor note: the crop keeps all stage area
-        // left of the panel edge; panel-side extra monitors are out of scope.
-        const mon = Main.layoutManager.primaryMonitor;
-        const w = full ? -1 : Math.max(1, mon.x + mon.width - this._width - 8);
-        const h = full ? -1 : Math.max(1, global.stage.height);
-
         const stream = Gio.MemoryOutputStream.new_resizable();
         await Shell.Screenshot.composite_to_stream(
-            texture, 0, 0, w, h, scale, null, 0, 0, 1, stream);
+            texture, 0, 0, -1, -1, scale, null, 0, 0, 1, stream);
         stream.close(null);
         const bytes = stream.steal_as_bytes();
 

@@ -123,6 +123,9 @@ Three tiers, picked per environment; the daemon is identical everywhere.
 > *not* hot-load a zombie back. Hard-won API notes:
 > in-shell capture = `Shell.Screenshot` (`screenshot_stage_to_content` →
 > `composite_to_stream`) — prompt-free, no D-Bus sender whitelist involved;
+> the panel **fades out (60 ms) for the capture and back in (160 ms)** so the
+> model receives the full desktop including content under the panel — context
+> over blinklessness, per user preference;
 > keybindings = `global.display.add_keybinding` with schema keys of **type
 > `as`** (strv; plain `s` silently fails validation); `Shell.ActionMode.ALL`
 > (0xffffffff) is rejected — compose from defined bits; `St.TextArea` and
