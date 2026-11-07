@@ -236,7 +236,10 @@ impl Agent {
             m
         };
 
-        let request_id = uuid::Uuid::new_v4().to_string();
+        // clients MAY pre-declare request_id in opts so signal correlation is
+        // race-free (fast providers can emit Done before the Ask reply lands).
+        let request_id = opts.get("request_id").cloned()
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
         let flag = Arc::new(AtomicBool::new(false));
         self.cancels.lock().unwrap().insert(request_id.clone(), flag.clone());
 

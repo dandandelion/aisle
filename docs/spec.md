@@ -113,7 +113,14 @@ Three tiers, picked per environment; the daemon is identical everywhere.
 
 ### Tier A — GNOME Shell extension (GNOME only)
 
-> **Verified on GNOME 50.6 (headless nested shell, 2026-11-07).** Hard-won API notes:
+> **Verified on GNOME 50.6 (headless nested shell, 2026-11-07).**
+> **Hot-reload rules (learned the hard way):** an already-loaded extension
+> reloads its code via `gnome-extensions disable && enable`; a freshly
+> *installed* extension only appears at next login (no directory rescan).
+> A `disable()` that throws mid-way leaves the extension in permanent
+> ERROR state (unrecoverable without logout) — so `destroy()`/`disable()`
+> must be paranoid (all API calls try/caught). Uninstall+reinstall does
+> *not* hot-load a zombie back. Hard-won API notes:
 > in-shell capture = `Shell.Screenshot` (`screenshot_stage_to_content` →
 > `composite_to_stream`) — prompt-free, no D-Bus sender whitelist involved;
 > keybindings = `global.display.add_keybinding` with schema keys of **type

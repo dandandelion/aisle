@@ -72,7 +72,11 @@ class Panel {
 
         // header
         const header = new St.BoxLayout({ style_class: 'sideagent-header' });
-        header.add_child(new St.Label({ text: 'sideagent', y_align: Clutter.ActorAlign.CENTER }));
+        const title = new St.Label({ y_align: Clutter.ActorAlign.CENTER });
+        title.clutter_text.set_markup('<span foreground="#58a6ff">●</span> <span foreground="#e6edf3">sideagent</span>');
+        header.add_child(title);
+        this._modelChip = new St.Label({ text: '', style_class: 'sideagent-model', y_align: Clutter.ActorAlign.CENTER });
+        header.add_child(this._modelChip);
         const spacer = new St.Label({ text: '', x_expand: true });
         header.add_child(spacer);
 
@@ -109,17 +113,22 @@ class Panel {
         this._status = new St.Label({ style_class: 'sideagent-status', text: '' });
         this._root.add_child(this._status);
 
-        // input
-        // GNOME 50's St dropped multi-line text widgets; v1 input is
-        // single-line (St.Entry.activate = Enter). Multi-line is backlog.
-        this._entry = new St.Entry({ style_class: 'sideagent-input' });
+        // input row: terminal prompt glyph + entry
+        // (GNOME 50's St dropped multi-line text widgets; v1 input is
+        // single-line. Multi-line is backlog.)
+        const inputRow = new St.BoxLayout({ style_class: 'sideagent-input-row' });
+        this._prompt = new St.Label({ text: '❯', style_class: 'sideagent-prompt' });
+        inputRow.add_child(this._prompt);
+        this._entry = new St.Entry({ style_class: 'sideagent-input', x_expand: true });
         this._entry.clutter_text.connect('activate', () => this._send());
         this._entry.connect('key-press-event', (_a, event) => this._onKeyPress(event));
-        this._root.add_child(this._entry);
+        inputRow.add_child(this._entry);
+        this._root.add_child(inputRow);
 
         const hint = new St.Label({
             style_class: 'sideagent-status',
             text: 'Enter send · Esc close',
+            style_class: 'sideagent-hint',
         });
         this._root.add_child(hint);
 
@@ -130,8 +139,9 @@ class Panel {
     }
 
     destroy() {
+        this._stopPulse();
         for (const id of this._sigIds)
-            Gio.DBus.session.unsubscribe_signal(id);
+            Gio.DBus.session.signal_unsubscribe(id);
         this._sigIds = [];
         Main.layoutManager.removeChrome(this._root);
         this._root.destroy();
@@ -156,25 +166,77 @@ class Panel {
 
     open() {
         const mon = Main.layoutManager.primaryMonitor;
-        this._root.set_position(mon.x + mon.width - this._width, mon.y);
         this._root.set_size(this._width, mon.height);
+        this._root.set_position(mon.x + mon.width, mon.y); // start off-screen
         this._root.show();
+        this._root.save_easing_state();
+        this._root.set_easing_duration(180);
+        this._root.set_easing_mode(Clutter.AnimationMode.EASE_OUT_QUAD);
+        this._root.set_position(mon.x + mon.width - this._width, mon.y);
+        this._root.restore_easing_state();
         this._visible = true;
         this._prevFocus = global.stage.get_key_focus();
         this._entry.grab_key_focus();
+        this._startPulse();
         this._setStatus('connecting…');
         this._ensureSession().catch(e => this._setStatus(`daemon unreachable: ${e.message || e}`));
+        this._refreshModelChip();
     }
 
     close() {
-        this._root.hide();
+        const mon = Main.layoutManager.primaryMonitor;
         this._visible = false;
+        this._stopPulse();
+        this._root.save_easing_state();
+        this._root.set_easing_duration(140);
+        this._root.set_easing_mode(Clutter.AnimationMode.EASE_IN_QUAD);
+        this._root.set_position(mon.x + mon.width, mon.y);
+        this._root.restore_easing_state();
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 150, () => {
+            if (!this._visible)
+                this._root.hide();
+            return GLib.SOURCE_REMOVE;
+        });
         if (this._prevFocus) {
             try {
                 global.stage.set_key_focus(this._prevFocus);
             } catch (_) { /* actor may be gone */ }
             this._prevFocus = null;
         }
+    }
+
+    // terminal-style pulsing prompt while the panel is open
+    _startPulse() {
+        this._stopPulse();
+        this._pulseUp = true;
+        this._pulseId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 530, () => {
+            if (!this._prompt || !this._visible)
+                return GLib.SOURCE_REMOVE;
+            this._prompt.save_easing_state();
+            this._prompt.set_easing_duration(260);
+            this._prompt.set_easing_mode(Clutter.AnimationMode.LINEAR);
+            this._prompt.opacity = this._pulseUp ? 60 : 255;
+            this._prompt.restore_easing_state();
+            this._pulseUp = !this._pulseUp;
+            return GLib.SOURCE_CONTINUE;
+        });
+    }
+
+    _stopPulse() {
+        if (this._pulseId) {
+            GLib.source_remove(this._pulseId);
+            this._pulseId = 0;
+        }
+        if (this._prompt)
+            this._prompt.opacity = 255;
+    }
+
+    _refreshModelChip() {
+        try {
+            const [st] = dbusCall('Status', null, null);
+            const prov = st.provider ?? ''; // "openai:model" or "UNCONFIGURED (...)"
+            this._modelChip.set_text(prov.startsWith('UNCONFIGURED') ? '⚠ no provider' : ` ${prov.split(':')[1] ?? ''}`);
+        } catch (_) { /* daemon down; status line already says it */ }
     }
 
     get visible() {
@@ -216,10 +278,15 @@ class Panel {
                 if (!this._visible)
                     this.open();
                 this._attachBtn.checked = true;
+                this._selftestShot = true;
                 this._entry.set_text('selftest: describe the attached screen');
-                this._ensureSession()
-                    .then(() => this._send())
-                    .catch(e => this._setStatus(`selftest session error: ${e.message || e}`));
+                // small delay so the slide-in animation settles before capture
+                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => {
+                    this._ensureSession()
+                        .then(() => this._send())
+                        .catch(e => this._setStatus(`selftest session error: ${e.message || e}`));
+                    return GLib.SOURCE_REMOVE;
+                });
                 break;
             }
             this.toggle();
@@ -230,7 +297,8 @@ class Panel {
             if (rid === this._currentReq && this._streamLabel) {
                 this._streamBuf += text;
                 try {
-                    this._streamLabel.clutter_text.set_markup(mdToPango(this._streamBuf));
+                    this._streamLabel.clutter_text.set_markup(
+                        `${this._streamLabel._roleMarkup ?? ''}\n${mdToPango(this._streamBuf)}`);
                     const adj = this._scroll.get_vadjustment();
                     adj.set_value(adj.get_upper());
                 } catch (_) {
@@ -252,6 +320,10 @@ class Panel {
                 this._streamLabel = null;
                 const u = usage instanceof Map ? Object.fromEntries(usage) : usage;
                 this._setStatus(`✓ ${u.ms} ms · ${u.in}→${u.out} tok · ${u.model}`);
+                if (this._selftestShot) {
+                    this._selftestShot = false;
+                    this._capturePath().catch(() => {}); // visual regression artifact
+                }
             }
             break;
         }
@@ -305,15 +377,20 @@ class Panel {
             this._attachBtn.checked = false;
         }
 
+        // pre-declare the id so early signals correlate (fast providers can
+        // emit Done before the Ask reply arrives)
+        const rid = `${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
+        opts.request_id = rid;
+        this._currentReq = rid;
         this._addMsg('user', text);
         this._streamBuf = '';
         this._streamLabel = this._addMsg('assistant', '…');
         this._setStatus('thinking…');
 
         try {
-            const [rid] = await dbusCall('Ask', '(ssa{ss})', [this._session ?? '', text, opts]);
-            this._currentReq = rid;
+            await dbusCall('Ask', '(ssa{ss})', [this._session ?? '', text, opts]);
         } catch (e) {
+            this._currentReq = null;
             this._setStatus(`ask failed: ${e.message || e}`);
             this._streamLabel = null;
         }
@@ -343,6 +420,11 @@ class Panel {
     // ---------- transcript ----------
 
     _addMsg(role, text) {
+        const who = role === 'user'
+            ? '<span foreground="#7ee787">❯ you</span>'
+            : role === 'assistant'
+                ? '<span foreground="#58a6ff">❯ sideagent</span>'
+                : '<span foreground="#8b949e">·</span>';
         const label = new St.Label({
             style_class: `sideagent-msg sideagent-msg-${role}`,
             x_align: Clutter.ActorAlign.FILL,
@@ -351,7 +433,8 @@ class Panel {
         label.clutter_text.set_line_wrap(true);
         label.clutter_text.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR);
         label.clutter_text.set_ellipsize(Pango.EllipsizeMode.NONE);
-        label.clutter_text.set_markup(mdToPango(text));
+        label._roleMarkup = who;
+        label.clutter_text.set_markup(`${who}\n${mdToPango(text)}`);
         label.set_width(this._width - 40);
         this._transcript.add_child(label);
         const adj = this._scroll.get_vadjustment();

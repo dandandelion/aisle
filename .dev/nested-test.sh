@@ -27,7 +27,7 @@ sleep 7
 kill -0 $GS 2>/dev/null && echo "shell: alive" || echo "shell: DEAD (see shell.log)"
 
 $S/target/debug/sideagentctl selftest > $N/ctl.log 2>&1; echo "ctl selftest: exit=$?"
-sleep 4
+sleep 9
 
 echo "===== EVIDENCE ====="
 echo "--- shell (extension lines):"
