@@ -67,6 +67,9 @@ enum Cmd {
         /// Attach a screenshot of the current screen (spec §7).
         #[arg(long = "screen")]
         attach_screen: bool,
+        /// Attach an existing PNG instead of capturing (e.g. extension-captured).
+        #[arg(long = "screenshot-file")]
+        screenshot_file: Option<String>,
     },
     /// Create a new session and print its id.
     New {
@@ -98,7 +101,7 @@ async fn main() -> Result<()> {
     )?;
 
     match cli.cmd {
-        Cmd::Ask { text, session, model, provider, attach_screen } => {
+        Cmd::Ask { text, session, model, provider, attach_screen, screenshot_file } => {
             let session_id = match session {
                 Some(s) => s,
                 None => {
@@ -119,6 +122,9 @@ async fn main() -> Result<()> {
             }
             if let Some(p) = provider {
                 opts.insert("provider".into(), p);
+            }
+            if let Some(f) = screenshot_file {
+                opts.insert("screenshot_path".into(), f);
             }
 
             // subscribe BEFORE Ask so no signal can slip past us
