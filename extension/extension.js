@@ -53,8 +53,9 @@ function promisifyScreenshot() {
 // ---------- panel ----------
 
 class Panel {
-    constructor(width) {
+    constructor(width, settings) {
         this._width = width;
+        this._settings = settings;
         this._visible = false;
         this._session = null;
         this._currentReq = null;
@@ -122,9 +123,8 @@ class Panel {
         // St.Entry internals, correct at any HiDPI scale — no layout games
         this._prompt = new St.Icon({
             icon_name: 'go-next-symbolic',
-            icon_size: 18,
-            style_class: 'symbolic',
-            style_class: 'sideagent-prompt',
+            icon_size: 14,
+            style_class: 'symbolic sideagent-prompt',
         });
         this._entry.set_primary_icon(this._prompt);
         this._entry.clutter_text.connect('activate', () => this._send());
@@ -172,6 +172,9 @@ class Panel {
     }
 
     open() {
+        // prompt knobs re-read every open: live-tune via gsettings, no logout
+        this._prompt.icon_size = this._settings.get_int('prompt-size');
+        this._prompt.set_translation(0, this._settings.get_int('prompt-y'), 0);
         const mon = Main.layoutManager.primaryMonitor;
         this._root.set_size(this._width, mon.height);
         this._root.set_position(mon.x + mon.width, mon.y); // start off-screen
@@ -507,9 +510,9 @@ class Panel {
 
 export default class SideagentExtension extends Extension {
     enable() {
-        log('sideagent: extension build 2026-11-07.1738');
+        log('sideagent: extension build 2026-11-07.1845');
         const width = this.getSettings().get_int('panel-width');
-        this._panel = new Panel(width);
+        this._panel = new Panel(width, this.getSettings());
 
         // load stylesheet
         const file = this.dir.get_child('stylesheet.css');

@@ -53,6 +53,26 @@ export default class SideagentPrefs extends ExtensionPreferences {
         spin.connect('value-changed', () => settings.set_int('panel-width', spin.value));
         widthRow.add_suffix(spin);
         panel.add(widthRow);
+
+        const sizeRow = new Adw.ActionRow({title: 'Prompt icon size (px)'});
+        const sizeSpin = new Gtk.SpinButton({
+            adjustment: new Gtk.Adjustment({lower: 8, upper: 32, step_increment: 1,
+                value: settings.get_int('prompt-size')}),
+            valign: Gtk.Align.CENTER,
+        });
+        sizeSpin.connect('value-changed', () => settings.set_int('prompt-size', sizeSpin.value));
+        sizeRow.add_suffix(sizeSpin);
+        panel.add(sizeRow);
+
+        const yRow = new Adw.ActionRow({title: 'Prompt vertical nudge (px, +down)'});
+        const ySpin = new Gtk.SpinButton({
+            adjustment: new Gtk.Adjustment({lower: -10, upper: 10, step_increment: 1,
+                value: settings.get_int('prompt-y')}),
+            valign: Gtk.Align.CENTER,
+        });
+        ySpin.connect('value-changed', () => settings.set_int('prompt-y', ySpin.value));
+        yRow.add_suffix(ySpin);
+        panel.add(yRow);
         page.add(panel);
 
         window.add(page);

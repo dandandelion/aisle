@@ -9,6 +9,14 @@
       <default>['&lt;Super&gt;&lt;Shift&gt;s']</default>
       <summary>Toggle "attach screen to next message"</summary>
     </key>
+    <key name="prompt-size" type="i">
+      <default>14</default>
+      <summary>Prompt chevron icon size (px)</summary>
+    </key>
+    <key name="prompt-y" type="i">
+      <default>2</default>
+      <summary>Prompt chevron vertical nudge (+down / -up, px)</summary>
+    </key>
     <key name="panel-width" type="i">
       <default>420</default>
       <summary>Panel width in pixels</summary>
