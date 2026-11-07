@@ -40,8 +40,8 @@ impl Agent1Service {
     }
 
     #[zbus(name = "RequestToggle")]
-    async fn request_toggle(&self) {
-        self.agent.request_toggle("ctl").await;
+    async fn request_toggle(&self, source: &str) {
+        self.agent.request_toggle(source).await;
     }
 
     #[zbus(name = "NewSession")]

@@ -113,6 +113,19 @@ Three tiers, picked per environment; the daemon is identical everywhere.
 
 ### Tier A — GNOME Shell extension (GNOME only)
 
+> **Verified on GNOME 50.6 (headless nested shell, 2026-11-07).** Hard-won API notes:
+> in-shell capture = `Shell.Screenshot` (`screenshot_stage_to_content` →
+> `composite_to_stream`) — prompt-free, no D-Bus sender whitelist involved;
+> keybindings = `global.display.add_keybinding` with schema keys of **type
+> `as`** (strv; plain `s` silently fails validation); `Shell.ActionMode.ALL`
+> (0xffffffff) is rejected — compose from defined bits; `St.TextArea` and
+> multi-line entries are gone from St-18 (v1 input = single-line `St.Entry`);
+> `addChrome` takes no `trackAlpha`; `Gio.DBusConnection.call` async form is
+> version-flaky — `call_sync` with explicit return-type slot is stable.
+> Live e2e (register → capture → ask → stream → render) is scripted in
+> `.dev/nested-test.sh` (runs a disposable headless shell; zero impact on
+> the user session).
+
 The overlay is a Clutter actor on the shell's stage, not a window:
 guaranteed placement at the right edge, always above, no taskbar entry,
 no WM interaction, animated slide-in. Keybindings are registered via the

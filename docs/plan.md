@@ -99,6 +99,10 @@ undocumented trick.
 **Accept:** toggle <100 ms; attach-screenshot hotkey works; extension
 disabled cleanly leaves zero residue; pinned `shell-version` list tested
 on the versions actually available on the distros we target.
+**Status:** extension JS live-verified headless on GNOME 50.6
+(end-to-end: RegisterFrontend → in-shell capture → Ask with image →
+streamed reply; `.dev/nested-test.sh`). Remaining: key press test in a
+real session (needs one logout for GNOME to pick up the new extension).
 
 ## M5 — Fill the matrix, then polish (~open-ended)
 

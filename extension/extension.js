@@ -30,19 +30,15 @@ function mdToPango(text) {
 }
 
 function dbusCall(member, sig, params) {
-    return new Promise((resolve, reject) => {
-        Gio.DBus.session.call(
-            BUS, OBJ, IFACE, member, sig,
-            sig ? new GLib.Variant(sig, params) : null,
-            Gio.DBus.CallFlags.NONE, 30000,
-            (conn, res) => {
-                try {
-                    resolve(conn.call_finish(res).deep_unpack());
-                } catch (e) {
-                    reject(e);
-                }
-            });
-    });
+    // call_sync: deterministic across gjs versions (auto-promisification of
+    // async call() differs between releases). Ask/Cancel return immediately;
+    // the reply stream is signal-based, so sync here never blocks the loop.
+    const reply = Gio.DBus.session.call_sync(
+        BUS, OBJ, IFACE, member,
+        sig ? new GLib.Variant(sig, params) : null,
+        null, // return type: infer
+        Gio.DBusCallFlags.NONE, 5000, null);
+    return reply ? reply.deep_unpack() : null;
 }
 
 let _promisified = false;
@@ -77,16 +73,15 @@ class Panel {
         // header
         const header = new St.BoxLayout({ style_class: 'sideagent-header' });
         header.add_child(new St.Label({ text: 'sideagent', y_align: Clutter.ActorAlign.CENTER }));
-        const spacer = new St.Label({ text: '' });
-        spacer.expand = true;
+        const spacer = new St.Label({ text: '', x_expand: true });
         header.add_child(spacer);
 
         this._attachBtn = new St.Button({ style_class: 'sideagent-button', label: '📎', toggleMode: true });
-        this._attachBtn.set_tooltip_text('attach screen to next message');
+        this._attachBtn.add_tooltip?.('attach screen to next message');
         header.add_child(this._attachBtn);
 
         const newBtn = new St.Button({ style_class: 'sideagent-button', label: '＋' });
-        newBtn.set_tooltip_text('new session');
+        newBtn.add_tooltip?.('new session');
         newBtn.connect('clicked', () => this._newSession());
         header.add_child(newBtn);
 
@@ -96,14 +91,17 @@ class Panel {
         this._root.add_child(header);
 
         // transcript
-        const scroll = new St.ScrollView({ x_fill: true, y_fill: true });
-        scroll.get_vscrollbar().connect('scroll', () => {});
+        const scroll = new St.ScrollView({
+            hscrollbar_policy: St.PolicyType.NEVER,
+            vscrollbar_policy: St.PolicyType.AUTOMATIC,
+            x_expand: true, y_expand: true,
+        });
         this._transcript = new St.BoxLayout({
             vertical: true,
             style_class: 'sideagent-transcript',
             x_align: Clutter.ActorAlign.FILL,
         });
-        scroll.add_actor(this._transcript);
+        scroll.add_child(this._transcript);
         this._scroll = scroll;
         this._root.add_child(scroll);
 
@@ -112,17 +110,20 @@ class Panel {
         this._root.add_child(this._status);
 
         // input
-        this._entry = new St.TextArea({ style_class: 'sideagent-input', height: 72 });
-        this._entry.clutter_text.connect('key-press-event', (_a, event) => this._onKeyPress(event));
+        // GNOME 50's St dropped multi-line text widgets; v1 input is
+        // single-line (St.Entry.activate = Enter). Multi-line is backlog.
+        this._entry = new St.Entry({ style_class: 'sideagent-input' });
+        this._entry.clutter_text.connect('activate', () => this._send());
+        this._entry.connect('key-press-event', (_a, event) => this._onKeyPress(event));
         this._root.add_child(this._entry);
 
         const hint = new St.Label({
             style_class: 'sideagent-status',
-            text: 'Enter send · Shift+Enter newline · Esc close',
+            text: 'Enter send · Esc close',
         });
         this._root.add_child(hint);
 
-        Main.layoutManager.addChrome(this._root, { trackAlpha: false });
+        Main.layoutManager.addTopChrome(this._root);
         this._root.hide();
 
         this._subscribe();
@@ -143,11 +144,8 @@ class Panel {
             return Clutter.EVENT_STOP;
         }
         if (sym === Clutter.KEY_Return || sym === Clutter.KEY_KP_Enter) {
-            const mods = event.get_state();
-            if (!(mods & Clutter.ModifierType.SHIFT_MASK)) {
-                this._send();
-                return Clutter.EVENT_STOP;
-            }
+            this._send();
+            return Clutter.EVENT_STOP;
         }
         return Clutter.EVENT_PROPAGATE;
     }
@@ -195,7 +193,7 @@ class Panel {
     _subscribe() {
         for (const sig of ['Delta', 'CaptureAttached', 'Done', 'Failed', 'ToggleRequested']) {
             const id = Gio.DBus.session.signal_subscribe(
-                BUS, IFACE, sig, OBJ, null, Gio.DBus.SignalMatchFlags.NONE,
+                BUS, IFACE, sig, OBJ, null, Gio.DBusSignalFlags.NONE,
                 (_c, _s, _p, _i, _m, data) => {
                     try {
                         this._onSignal(sig, data.deep_unpack());
@@ -209,15 +207,35 @@ class Panel {
 
     _onSignal(sig, body) {
         switch (sig) {
-        case 'ToggleRequested':
+        case 'ToggleRequested': {
+            const unpacked = Array.isArray(body) ? body : [body];
+            const source = typeof unpacked[0] === 'string' ? unpacked[0] : '';
+            if (source === 'selftest') {
+                // driven headless e2e: open, capture via Shell.Screenshot,
+                // ask with the captured file, expect a streamed reply.
+                if (!this._visible)
+                    this.open();
+                this._attachBtn.checked = true;
+                this._entry.set_text('selftest: describe the attached screen');
+                this._ensureSession()
+                    .then(() => this._send())
+                    .catch(e => this._setStatus(`selftest session error: ${e.message || e}`));
+                break;
+            }
             this.toggle();
             break;
+        }
         case 'Delta': {
             const [rid, text] = body;
-            if (rid === this._currentReq) {
+            if (rid === this._currentReq && this._streamLabel) {
                 this._streamBuf += text;
-                this._streamLabel.clutter_text.set_markup(mdToPango(this._streamBuf));
-                this._scroll.get_vscrollbar().get_adjustment().set_value(1e9);
+                try {
+                    this._streamLabel.clutter_text.set_markup(mdToPango(this._streamBuf));
+                    const adj = this._scroll.get_vadjustment();
+                    adj.set_value(adj.get_upper());
+                } catch (_) {
+                    this._streamLabel = null; // actor disposed (panel closed/session reset)
+                }
             }
             break;
         }
@@ -232,7 +250,8 @@ class Panel {
             if (rid === this._currentReq) {
                 this._currentReq = null;
                 this._streamLabel = null;
-                this._setStatus(`✓ ${usage.get('ms')} ms · ${usage.get('in')}→${usage.get('out')} tok · ${usage.get('model')}`);
+                const u = usage instanceof Map ? Object.fromEntries(usage) : usage;
+                this._setStatus(`✓ ${u.ms} ms · ${u.in}→${u.out} tok · ${u.model}`);
             }
             break;
         }
@@ -262,17 +281,17 @@ class Panel {
     }
 
     async _newSession() {
-        const [id] = await dbusCall('NewSession', 'ss', ['', '']);
+        const [id] = await dbusCall('NewSession', '(ss)', ['', '']);
         this._session = id;
         this._transcript.destroy_all_children();
         this._setStatus('new session');
     }
 
     async _send() {
-        const text = this._entry.text.trim();
+        const text = this._entry.get_text().trim();
         if (!text || this._currentReq)
             return;
-        this._entry.text = '';
+        this._entry.set_text('');
 
         const opts = {};
         if (this._attachBtn.checked) {
@@ -292,7 +311,7 @@ class Panel {
         this._setStatus('thinking…');
 
         try {
-            const [rid] = await dbusCall('Ask', 'ssa{ss}', [this._session ?? '', text, opts]);
+            const [rid] = await dbusCall('Ask', '(ssa{ss})', [this._session ?? '', text, opts]);
             this._currentReq = rid;
         } catch (e) {
             this._setStatus(`ask failed: ${e.message || e}`);
@@ -317,6 +336,7 @@ class Panel {
         GLib.mkdir_with_parents(dir, 0o700);
         const path = GLib.build_filenamev([dir, `ext-${Date.now()}.png`]);
         GLib.file_set_contents(path, bytes.get_data());
+        log(`sideagent: captured screen -> ${path}`);
         return path;
     }
 
@@ -332,9 +352,10 @@ class Panel {
         label.clutter_text.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR);
         label.clutter_text.set_ellipsize(Pango.EllipsizeMode.NONE);
         label.clutter_text.set_markup(mdToPango(text));
-        label.width = this._width - 40;
+        label.set_width(this._width - 40);
         this._transcript.add_child(label);
-        this._scroll.get_vscrollbar().get_adjustment().set_value(1e9);
+        const adj = this._scroll.get_vadjustment();
+                adj.set_value(adj.get_upper());
         return label;
     }
 
@@ -359,11 +380,15 @@ export default class SideagentExtension extends Extension {
         // keybindings from our schema — GNOME 50 moved these to Meta.Display;
         // fall back to the removed Meta namespace for older shells.
         this._settings = this.getSettings();
+        // GNOME 50 validates the flags mask; build from defined bits
+        // instead of ALL (0xffffffff rejected).
+        const AM = Shell.ActionMode;
+        const mode = AM.GLOBAL | AM.MENU | AM.OVERVIEW | AM.POPUP | AM.MODAL | AM.LOCKSCREEN;
         this._addBinding = (name, handler) => {
             if (global.display.add_keybinding)
-                global.display.add_keybinding(name, this._settings, Shell.ActionMode.ALL, handler);
+                global.display.add_keybinding(name, this._settings, mode, handler);
             else
-                Meta.add_keybinding(name, this._settings, Shell.ActionMode.ALL, handler);
+                Meta.add_keybinding(name, this._settings, mode, handler);
         };
         this._removeBinding = name =>
             (global.display.remove_keybinding ?? Meta.remove_keybinding).call(
@@ -373,8 +398,12 @@ export default class SideagentExtension extends Extension {
         this._addBinding('attach-shortcut', () => this._panel.armAttach());
 
         // announce ourselves; daemon suppresses other frontends
-        dbusCall('RegisterFrontend', 's', ['extension']).catch(
-            () => log('sideagent: daemon not running yet'));
+        try {
+            const ok = dbusCall('RegisterFrontend', '(s)', ['extension']);
+            log(`sideagent: frontend registered (active=${ok})`);
+        } catch (e) {
+            log(`sideagent: daemon not reachable: ${e.message || e}`);
+        }
     }
 
     disable() {

@@ -28,7 +28,7 @@ trait Agent1 {
     #[zbus(name = "DeleteSession")]
     async fn delete_session(&self, session_id: &str) -> zbus::Result<()>;
     #[zbus(name = "RequestToggle")]
-    async fn request_toggle(&self) -> zbus::Result<()>;
+    async fn request_toggle(&self, source: &str) -> zbus::Result<()>;
     #[zbus(name = "Status")]
     async fn status(&self) -> zbus::Result<HashMap<String, String>>;
 
@@ -86,6 +86,9 @@ enum Cmd {
     Rm { session: String },
     /// Ask the daemon to emit ToggleRequested (hotkey floor).
     Toggle,
+    /// Ask the daemon to emit ToggleRequested("selftest") — drives the
+    /// extension's headless end-to-end hook.
+    Selftest,
     /// Daemon status.
     Status,
 }
@@ -199,7 +202,8 @@ async fn main() -> Result<()> {
             }
         }
         Cmd::Rm { session } => proxy.delete_session(&session).await?,
-        Cmd::Toggle => proxy.request_toggle().await?,
+        Cmd::Toggle => proxy.request_toggle("ctl").await?,
+        Cmd::Selftest => proxy.request_toggle("selftest").await?,
         Cmd::Status => {
             let mut st = proxy.status().await?;
             for (k, v) in st.drain() {
