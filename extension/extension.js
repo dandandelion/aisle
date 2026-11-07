@@ -117,12 +117,17 @@ class Panel {
         // (GNOME 50's St dropped multi-line text widgets; v1 input is
         // single-line. Multi-line is backlog.)
         const inputRow = new St.BoxLayout({ style_class: 'sideagent-input-row' });
-        this._prompt = new St.Label({ text: '❯', style_class: 'sideagent-prompt', y_align: Clutter.ActorAlign.CENTER });
+        this._prompt = new St.Label({ text: '❯', style_class: 'sideagent-prompt' });
         inputRow.add_child(this._prompt);
         this._entry = new St.Entry({ style_class: 'sideagent-input', x_expand: true });
         this._entry.clutter_text.connect('activate', () => this._send());
         this._entry.connect('key-press-event', (_a, event) => this._onKeyPress(event));
         inputRow.add_child(this._entry);
+        this._prompt.add_constraint(new Clutter.AlignConstraint({
+            source: this._entry,
+            align_axis: Clutter.AlignAxis.Y_AXIS,
+            factor: 0.5,
+        }));
         this._root.add_child(inputRow);
 
         const hint = new St.Label({
@@ -341,14 +346,30 @@ class Panel {
     }
 
     async _ensureSession() {
-        if (this._session)
+        if (this._session) {
+            await this._loadHistory();
             return;
+        }
         const [sessions] = await dbusCall('ListSessions', null, null);
         if (sessions.length) {
             this._session = sessions[0][0];
             this._setStatus(`session: ${sessions[0][1] || '(untitled)'}`);
+            await this._loadHistory();
         } else {
             await this._newSession();
+        }
+    }
+
+    async _loadHistory() {
+        if (this._transcript.get_n_children() > 0)
+            return; // already rendered
+        const [msgs] = await dbusCall('GetMessages', '(si)', [this._session, 30]);
+        if (msgs.length && this._transcript.get_n_children() === 0) {
+            for (const m of msgs) {
+                // Msg struct unpacks to [id, session_id, role, text, created_at]
+                this._addMsg(m[2] === 'system' ? 'system' : m[2], m[3]);
+            }
+            this._setStatus(`session restored · ${msgs.length} message(s)`);
         }
     }
 
