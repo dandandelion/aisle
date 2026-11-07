@@ -117,7 +117,7 @@ class Panel {
         // (GNOME 50's St dropped multi-line text widgets; v1 input is
         // single-line. Multi-line is backlog.)
         const inputRow = new St.BoxLayout({ style_class: 'sideagent-input-row' });
-        this._prompt = new St.Label({ text: '❯', style_class: 'sideagent-prompt' });
+        this._prompt = new St.Label({ text: '❯', style_class: 'sideagent-prompt', y_align: Clutter.ActorAlign.CENTER });
         inputRow.add_child(this._prompt);
         this._entry = new St.Entry({ style_class: 'sideagent-input', x_expand: true });
         this._entry.clutter_text.connect('activate', () => this._send());
@@ -322,7 +322,7 @@ class Panel {
                 this._setStatus(`✓ ${u.ms} ms · ${u.in}→${u.out} tok · ${u.model}`);
                 if (this._selftestShot) {
                     this._selftestShot = false;
-                    this._capturePath().catch(() => {}); // visual regression artifact
+                    this._capturePath({full: true}).catch(() => {}); // visual regression artifact
                 }
             }
             break;
@@ -398,14 +398,24 @@ class Panel {
 
     // ---------- capture (in-shell, prompt-free) ----------
 
-    async _capturePath() {
+    async _capturePath({full = false} = {}) {
         promisifyScreenshot();
         const shooter = new Shell.Screenshot();
         const [content, scale] = await shooter.screenshot_stage_to_content();
         const texture = content.get_texture();
+
+        // Exclude our own panel from the capture: crop the stage to the area
+        // left of the panel (everything the user can see behind us). The
+        // panel never enters the image, so the model sees the desktop, not
+        // its own UI. Multi-monitor note: the crop keeps all stage area
+        // left of the panel edge; panel-side extra monitors are out of scope.
+        const mon = Main.layoutManager.primaryMonitor;
+        const w = full ? -1 : Math.max(1, mon.x + mon.width - this._width - 8);
+        const h = full ? -1 : Math.max(1, global.stage.height);
+
         const stream = Gio.MemoryOutputStream.new_resizable();
         await Shell.Screenshot.composite_to_stream(
-            texture, 0, 0, -1, -1, scale, null, 0, 0, 1, stream);
+            texture, 0, 0, w, h, scale, null, 0, 0, 1, stream);
         stream.close(null);
         const bytes = stream.steal_as_bytes();
 
