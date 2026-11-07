@@ -11,6 +11,23 @@ use crate::error::{Error, Result};
 
 pub struct GnomeShell;
 
+/// `gnome-shell --version` -> "GNOME Shell 50.6" -> 50; unknown -> 0 (probe
+/// the API anyway).
+fn shell_version_under(major_max: u32) -> bool {
+    let out = std::process::Command::new("gnome-shell").arg("--version").output();
+    let ver = match out {
+        Ok(o) => {
+            let text = String::from_utf8_lossy(&o.stdout).to_string();
+            text.split_whitespace().last()
+                .and_then(|v| v.split('.').next())
+                .and_then(|v| v.parse::<u32>().ok())
+                .unwrap_or(0)
+        }
+        Err(_) => 0,
+    };
+    ver <= major_max
+}
+
 #[zbus::proxy(
     interface = "org.gnome.Shell.Screenshot",
     default_service = "org.gnome.Shell.Screenshot",
@@ -37,6 +54,13 @@ impl ScreenCapture for GnomeShell {
     }
 
     async fn probe(&self) -> bool {
+        // GNOME >= 47 whitelists callers of the screenshot API (verified on
+        // 50.6: third-party senders get AccessDenied). On those, the Tier A
+        // extension is the prompt-free path; skip the D-Bus backend.
+        if !shell_version_under(47) {
+            tracing::debug!("gnome-shell >= 47: screenshot API locked; skipping D-Bus backend");
+            return false;
+        }
         // Proxy::new performs introspection on the bus name: fails fast if
         // gnome-shell's screenshot interface is absent (non-GNOME desktops).
         match Connection::session().await {

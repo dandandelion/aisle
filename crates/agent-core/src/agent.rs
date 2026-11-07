@@ -28,8 +28,9 @@ const DELTA_BATCH_BYTES: usize = 2048;
 
 pub struct Agent {
     cfg: Config,
+    config_error: Option<String>,
     store: Arc<Mutex<Store>>,
-    provider: Arc<dyn Provider>,
+    provider: Option<Arc<dyn Provider>>,
     named: Mutex<HashMap<String, Arc<dyn Provider>>>,
     captures: Vec<Arc<dyn ScreenCapture>>,
     conn: OnceLock<Connection>,
@@ -42,13 +43,15 @@ pub struct Agent {
 impl Agent {
     fn make(
         cfg: Config,
+        config_error: Option<String>,
         store: Store,
-        provider: Arc<dyn Provider>,
+        provider: Option<Arc<dyn Provider>>,
         captures: Vec<Arc<dyn ScreenCapture>>,
         data_dir: PathBuf,
     ) -> Arc<Self> {
         let a = Arc::new(Self {
             store: Arc::new(Mutex::new(store)),
+            config_error,
             provider,
             named: Mutex::new(HashMap::new()),
             captures,
@@ -63,17 +66,23 @@ impl Agent {
         a
     }
 
-    pub async fn new(cfg: Config) -> Result<Arc<Self>> {
+    pub async fn new(cfg: Config, config_error: Option<String>) -> Result<Arc<Self>> {
         let data_dir = Config::data_dir()?;
         let store = Store::open(&data_dir.join("sessions.db"))?;
-        let provider = provider::build(&cfg.provider)?;
+        // degraded mode: a broken/missing config must not stop the daemon;
+        // Ask then fails in-band with an actionable message (spec §3.3).
+        let provider = if config_error.is_some() || cfg.provider.api_key.is_empty() {
+            None
+        } else {
+            Some(provider::build(&cfg.provider)?)
+        };
         let captures = capture::resolve(&cfg.capture).await;
-        Ok(Self::make(cfg, store, provider, captures, data_dir))
+        Ok(Self::make(cfg, config_error, store, provider, captures, data_dir))
     }
 
     /// Test wiring: inject store + provider, no bus, no capture.
     pub fn for_test(cfg: Config, store: Store, provider: Arc<dyn Provider>) -> Arc<Self> {
-        Self::make(cfg, store, provider, Vec::new(), std::env::temp_dir().join("sideagent-test-data"))
+        Self::make(cfg, None, store, Some(provider), Vec::new(), std::env::temp_dir().join("sideagent-test-data"))
     }
 
     pub fn set_conn(&self, conn: Connection) {
@@ -97,7 +106,13 @@ impl Agent {
     }
 
     fn provider_for(&self, name: Option<&str>) -> Result<Arc<dyn Provider>> {
-        let Some(name) = name else { return Ok(self.provider.clone()) };
+        let default = || -> Result<Arc<dyn Provider>> {
+            self.provider.clone().ok_or_else(|| Error::Provider(format!(
+                "no provider configured ({}); edit ~/.config/sideagent/config.toml",
+                self.config_error.as_deref().unwrap_or("api_key empty")
+            )))
+        };
+        let Some(name) = name else { return default() };
         let mut guard = self.named.lock().unwrap();
         if let Some(p) = guard.get(name) {
             return Ok(p.clone());
@@ -170,7 +185,10 @@ impl Agent {
     pub fn status(&self) -> HashMap<String, String> {
         let mut m = HashMap::new();
         m.insert("version".into(), env!("CARGO_PKG_VERSION").into());
-        m.insert("provider".into(), format!("{}:{}", self.provider.name(), self.cfg.provider.model));
+        m.insert("provider".into(), match &self.provider {
+            Some(p) => format!("{}:{}", p.name(), self.cfg.provider.model),
+            None => format!("UNCONFIGURED ({})", self.config_error.as_deref().unwrap_or("api_key empty")),
+        });
         m.insert(
             "capture_backends".into(),
             if self.captures.is_empty() {
@@ -239,8 +257,25 @@ impl Agent {
     }
 
     async fn capture_and_store(&self) -> Result<PreparedAttachment> {
-        let backend = self.captures.first().ok_or_else(capture::no_backend_error)?;
-        let cap = backend.capture().await?;
+        if self.captures.is_empty() {
+            return Err(capture::no_backend_error());
+        }
+        // try each probed backend in order; a probe can pass but the call
+        // still fail (e.g. policy changes) — degrade to the next.
+        let mut last_err = None;
+        for backend in &self.captures {
+            match backend.capture().await {
+                Ok(cap) => return self.store_capture(cap).await,
+                Err(e) => {
+                    tracing::warn!("capture via {}: {e}", backend.name());
+                    last_err = Some(e);
+                }
+            }
+        }
+        Err(last_err.unwrap_or_else(capture::no_backend_error))
+    }
+
+    async fn store_capture(&self, cap: crate::capture::CapturedImage) -> Result<PreparedAttachment> {
         let path = image::store_original(&self.data_dir, &cap.png)?;
         Ok(PreparedAttachment {
             original_path: path.to_string_lossy().into_owned(),

@@ -6,9 +6,13 @@ desktop, never steals your window layout, and disappears as fast as it
 appeared. You chat with a multimodal model and, when you want, attach a
 screenshot of your actual screen as context.
 
-> Status: **spec / planning phase.** No code yet. Decisions are recorded in
-> [docs/decisions.md](docs/decisions.md); the build order is in
-> [docs/plan.md](docs/plan.md).
+> Status: **M0 + M1 shipped and live-tested; M4 (GNOME extension)
+> verified headless end-to-end, awaiting one logout to activate on the
+> real session.** `sideagentd` runs as a systemd user service now
+> (degraded until `~/.config/sideagent/config.toml` exists — run
+> `sideagentctl status` to see the hint). Build order + acceptance
+> criteria in [docs/plan.md](docs/plan.md); rationale in
+> [docs/decisions.md](docs/decisions.md).
 
 ## The shape of it
 
@@ -41,6 +45,22 @@ other OSes later" an honest statement rather than a hope.
 | X11 window managers — i3, bspwm, openbox, awesome | GTK4 X11 window (`keep-above` + sticky + positioned) | daemon `XGrabKey` (xcb) | xcb root-window capture |
 | GNOME without the extension | GTK4 window, WM-decided position (helper extension optional) | portal / `sideagentctl toggle` | `org.gnome.Shell.Screenshot` |
 | Anything else Wayland | GTK4 window | `sideagentctl toggle` bound by user | xdg-desktop-portal (prompts — last resort) |
+
+## Try it (current state)
+
+```bash
+# daemon (already installed + enabled on this box):
+sideagentctl status                       # degraded until configured
+mkdir -p ~/.config/sideagent && cp config.example.toml ~/.config/sideagent/config.toml
+$EDITOR ~/.config/sideagent/config.toml   # set provider.model + api_key
+chmod 600 ~/.config/sideagent/config.toml
+systemctl --user restart sideagentd
+sideagentctl ask --screen "what is this?" # terminal chat with screen context
+
+# overlay (GNOME extension — needs ONE logout for GNOME 50 to load it):
+gnome-extensions enable org.sideagent     # after next login
+# Super+Shift+A toggle · Super+Shift+S attach-screen · Esc close
+```
 
 ## Documentation map
 

@@ -114,13 +114,37 @@ impl Default for ProviderSection {
     }
 }
 
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            provider: ProviderSection::default(),
+            capture: CaptureSection::default(),
+            ui: UiSection::default(),
+            hotkey: HotkeySection::default(),
+            image: ImageSection::default(),
+        }
+    }
+}
+
 impl Config {
+    pub fn load_or_default() -> (Self, Option<String>) {
+        match Self::load() {
+            Ok(cfg) => (cfg, None),
+            Err(e) => (Self { provider: ProviderSection { api_key: std::env::var("SIDEAGENT_API_KEY").unwrap_or_default(), ..Default::default() }, ..Default::default() }, Some(e.to_string())),
+        }
+    }
+
     pub fn load() -> Result<Self> {
         let path = Self::config_path()?;
         let text = std::fs::read_to_string(&path)
             .map_err(|e| Error::Config(format!("{}: {e}", path.display())))?;
-        let cfg: Config = toml::from_str(&text)
+        let mut cfg: Config = toml::from_str(&text)
             .map_err(|e| Error::Config(format!("{}: {e}", path.display())))?;
+        if cfg.provider.api_key.is_empty() {
+            if let Ok(k) = std::env::var("SIDEAGENT_API_KEY") {
+                cfg.provider.api_key = k;
+            }
+        }
         cfg.validate()?;
         Ok(cfg)
     }

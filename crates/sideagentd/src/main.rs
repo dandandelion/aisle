@@ -99,8 +99,11 @@ async fn main() -> anyhow::Result<()> {
         .with_writer(std::io::stderr)
         .init();
 
-    let cfg = Config::load().context("loading config.toml")?;
-    let agent = Agent::new(cfg).await.context("starting agent core")?;
+    let (cfg, config_error) = Config::load_or_default();
+    if let Some(e) = &config_error {
+        tracing::warn!("degraded mode: {e}");
+    }
+    let agent = Agent::new(cfg, config_error).await.context("starting agent core")?;
 
     let conn = Builder::session()?
         .name(BUS_NAME)

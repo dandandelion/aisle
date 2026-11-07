@@ -174,6 +174,12 @@ async fn main() -> Result<()> {
                             }
                         }
                     }
+                    _ = tokio::signal::ctrl_c() => {
+                        proxy.cancel(&request_id).await.ok();
+                        println!();
+                        eprintln!("[cancelled — daemon keeps the partial answer]");
+                        break;
+                    }
                     ev = failed.next() => {
                         if let Some(d) = ev {
                             let body = d.args().unwrap();
