@@ -120,8 +120,6 @@ class Panel {
         this._prompt = new St.Label({ text: '❯', style_class: 'sideagent-prompt' });
         inputRow.add_child(this._prompt);
         this._entry = new St.Entry({ style_class: 'sideagent-input', x_expand: true });
-        this._entry.set_height(24);
-        this._prompt.set_height(24);
         this._entry.clutter_text.connect('activate', () => this._send());
         this._entry.connect('key-press-event', (_a, event) => this._onKeyPress(event));
         inputRow.add_child(this._entry);
@@ -329,6 +327,7 @@ class Panel {
                 this._setStatus(`✓ ${u.ms} ms · ${u.in}→${u.out} tok · ${u.model}`);
                 if (this._selftestShot) {
                     this._selftestShot = false;
+                    this._entry.set_text('Hjkl typ| test'); // exercise composer layout in shot
                     this._capturePath({full: true}).catch(() => {}); // visual regression artifact
                 }
             }
@@ -506,7 +505,7 @@ class Panel {
 
 export default class SideagentExtension extends Extension {
     enable() {
-        log('sideagent: extension build 2026-11-07.1620');
+        log('sideagent: extension build 2026-11-07.1715');
         const width = this.getSettings().get_int('panel-width');
         this._panel = new Panel(width);
 

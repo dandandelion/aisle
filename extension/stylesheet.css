@@ -60,6 +60,7 @@
   color: #58a6ff;
   font-weight: bold;
   font-size: 15px;
+  margin-top: 3px; /* optical: the ❯ glyph sits high in its line box */
 }
 
 .sideagent-input {
