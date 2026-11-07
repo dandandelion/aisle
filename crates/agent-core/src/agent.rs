@@ -350,7 +350,10 @@ async fn run_answer(
         .unwrap_or_else(|| agent.cfg.provider.model.clone());
     let provider = match agent.provider_for(provider_name.as_deref()) {
         Ok(p) => p,
-        Err(e) => return failed(&agent, &request_id, "internal", e.to_string()).await,
+        Err(e) => {
+            let kind = e.kind();
+            return failed(&agent, &request_id, kind, e.to_string()).await;
+        }
     };
 
     let req = context::build_request(&model, &history, &images, &agent.cfg.image);

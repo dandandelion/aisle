@@ -84,6 +84,8 @@ enum Cmd {
     Show { session: String },
     /// Delete a session.
     Rm { session: String },
+    /// Delete image originals no longer referenced by any attachment.
+    Vacuum,
     /// Ask the daemon to emit ToggleRequested (hotkey floor).
     Toggle,
     /// Ask the daemon to emit ToggleRequested("selftest") — drives the
@@ -208,6 +210,27 @@ async fn main() -> Result<()> {
             }
         }
         Cmd::Rm { session } => proxy.delete_session(&session).await?,
+        Cmd::Vacuum => {
+            // direct DB access: cleanup tool, daemon holds no locks between ops
+            let db = agent_core::config::Config::data_dir()?.join("sessions.db");
+            let store = agent_core::store::Store::open(&db)?;
+            let referenced: std::collections::HashSet<String> =
+                store.all_attachment_paths()?.into_iter().collect();
+            let img_dir = agent_core::config::Config::data_dir()?.join("images");
+            let mut removed = 0usize;
+            if img_dir.is_dir() {
+                for entry in std::fs::read_dir(&img_dir)? {
+                    let path = entry?.path();
+                    if path.is_file()
+                        && !referenced.contains(&path.to_string_lossy().into_owned())
+                    {
+                        std::fs::remove_file(&path)?;
+                        removed += 1;
+                    }
+                }
+            }
+            println!("removed {removed} orphaned image(s)");
+        }
         Cmd::Toggle => proxy.request_toggle("ctl").await?,
         Cmd::Selftest => proxy.request_toggle("selftest").await?,
         Cmd::Status => {

@@ -183,6 +183,12 @@ impl Store {
         Ok(())
     }
 
+    pub fn all_attachment_paths(&self) -> Result<Vec<String>> {
+        let mut stmt = self.conn.prepare("SELECT DISTINCT path FROM attachments")?;
+        let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
+        rows.collect::<rusqlite::Result<Vec<_>>>().map_err(Into::into)
+    }
+
     pub fn add_attachment(
         &mut self,
         message_id: i64,
