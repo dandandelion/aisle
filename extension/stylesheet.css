@@ -1,0 +1,59 @@
+.sideagent-panel {
+  background-color: rgba(20, 20, 26, 0.94);
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  color: #e8e8ea;
+  padding: 10px;
+}
+
+.sideagent-header {
+  font-weight: bold;
+  font-size: 1.05em;
+  padding: 4px 2px 8px 2px;
+  color: #a8c7fa;
+}
+
+.sideagent-transcript {
+  spacing: 8px;
+}
+
+.sideagent-msg {
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 0.95em;
+}
+
+.sideagent-msg-user {
+  background-color: rgba(90, 130, 220, 0.25);
+}
+
+.sideagent-msg-assistant {
+  background-color: rgba(255, 255, 255, 0.07);
+}
+
+.sideagent-msg-system {
+  color: #9a9aa2;
+  font-style: italic;
+}
+
+.sideagent-input {
+  background-color: rgba(255, 255, 255, 0.09);
+  border-radius: 6px;
+  padding: 6px;
+  color: #ffffff;
+}
+
+.sideagent-button {
+  border-radius: 6px;
+  padding: 4px 10px;
+  background-color: rgba(255, 255, 255, 0.10);
+}
+
+.sideagent-button:checked {
+  background-color: rgba(120, 170, 255, 0.45);
+}
+
+.sideagent-status {
+  color: #9a9aa2;
+  font-size: 0.85em;
+  padding: 2px;
+}

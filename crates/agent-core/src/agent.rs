@@ -199,7 +199,15 @@ impl Agent {
         let session = self.store.lock().unwrap().get_session(session_id)?;
         let attach = opts.get("attach_screen").map(|v| v == "true").unwrap_or(false);
 
-        let prepared = if attach { Some(self.capture_and_store().await?) } else { None };
+        let prepared = if let Some(path) = opts.get("screenshot_path") {
+            // Tier A extension captures in-shell (GNOME ≥47 lockdown) and
+            // hands us the PNG path.
+            Some(self.ingest_screenshot(path).await?)
+        } else if attach {
+            Some(self.capture_and_store().await?)
+        } else {
+            None
+        };
 
         let user_msg = {
             let mut store = self.store.lock().unwrap();
@@ -236,6 +244,18 @@ impl Agent {
         let path = image::store_original(&self.data_dir, &cap.png)?;
         Ok(PreparedAttachment {
             original_path: path.to_string_lossy().into_owned(),
+            width: cap.width,
+            height: cap.height,
+            bytes: cap.png.len(),
+        })
+    }
+
+    async fn ingest_screenshot(&self, path: &str) -> Result<PreparedAttachment> {
+        let fc = capture::file::FileCapture::new(path);
+        let cap = ScreenCapture::capture(&fc).await?;
+        let stored = image::store_original(&self.data_dir, &cap.png)?;
+        Ok(PreparedAttachment {
+            original_path: stored.to_string_lossy().into_owned(),
             width: cap.width,
             height: cap.height,
             bytes: cap.png.len(),

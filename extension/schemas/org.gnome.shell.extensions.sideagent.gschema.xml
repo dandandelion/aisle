@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.sideagent" path="/org/gnome/shell/extensions/sideagent/">
+    <key name="toggle-shortcut" type="s">
+      <default>'&lt;Super&gt;&lt;Shift&gt;a'</default>
+      <summary>Toggle the sideagent panel</summary>
+    </key>
+    <key name="attach-shortcut" type="s">
+      <default>'&lt;Super&gt;&lt;Shift&gt;s'</default>
+      <summary>Toggle "attach screen to next message"</summary>
+    </key>
+    <key name="panel-width" type="i">
+      <default>420</default>
+      <summary>Panel width in pixels</summary>
+    </key>
+  </schema>
+</schemalist>

@@ -1,0 +1,8 @@
+{
+  "uuid": "org.sideagent",
+  "name": "sideagent",
+  "description": "Hotkey-away AI side panel with optional screen context. Talks to sideagentd over D-Bus.",
+  "shell-version": ["50"],
+  "url": "https://example.invalid/sideagent",
+  "settings-schema": "org.gnome.shell.extensions.sideagent"
+}
