@@ -111,19 +111,55 @@ fn md_to_pango(src: &str) -> String {
 
 const CSS: &str = "
 window { background-color: #0d1117; }
-.panel { background-color: #0d1117; }
-.header { font-weight: bold; font-size: 15px; padding: 6px; }
+headerbar {
+  background-color: #0d1117;
+  background-image: none;
+  color: #e6edf3;
+  box-shadow: none;
+  border-bottom: 1px solid #21262d;
+  padding: 4px 10px;
+  min-height: 40px;
+}
+headerbar button, headerbar button.image-button {
+  background: none;
+  background-color: transparent;
+  border-color: transparent;
+}
+headerbar button:hover { background-color: #21262d; }
 .model { color: #8b949e; font-size: 11px; }
-.transcript { margin: 4px; }
-.msg { color: #c9d1d9; font-family: 'Source Code Pro', 'Adwaita Mono', monospace; }
+.title-dot { font-size: 15px; }
+.transcript { margin: 6px 10px; }
+.msg {
+  color: #c9d1d9;
+  font-family: 'Source Code Pro', 'Adwaita Mono', monospace;
+  font-size: 13px;
+}
 .msg-user { color: #7ee787; }
 .msg-system { color: #8b949e; font-style: italic; }
-.status { color: #8b949e; font-size: 11px; padding: 4px 8px; }
-.inputrow { background-color: #161b22; border: 1px solid #30363d; border-radius: 8px; margin: 8px; padding: 4px; }
-.inputrow text { background-color: transparent; color: #e6edf3; font-family: 'Source Code Pro', 'Adwaita Mono', monospace; caret-color: #58a6ff; }
-button { background-color: #21262d; color: #c9d1d9; border: 1px solid #30363d; border-radius: 6px; margin: 0 3px; padding: 2px 10px; }
-button:hover { background-color: #30363d; }
-button:checked, button.active { background-color: #1f6feb; color: #ffffff; border-color: #58a6ff; }
+.status { color: #8b949e; font-size: 11px; padding: 2px 12px 4px 12px; }
+.inputrow {
+  background-color: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 10px;
+  margin: 8px 12px 12px 12px;
+  padding: 6px 8px;
+}
+.inputrow:focus-within { border-color: #58a6ff; }
+textview { background-color: transparent; font-family: 'Source Code Pro', 'Adwaita Mono', monospace; font-size: 13px; }
+.inputrow textview text { background-color: #161b22; color: #e6edf3; caret-color: #58a6ff; }
+button {
+  background: none;
+  background-color: #21262d;
+  color: #c9d1d9;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  margin: 0 3px;
+  padding: 4px 12px;
+  min-height: 22px;
+  font-size: 13px;
+}
+button:hover { background-color: #30363d; border-color: #8b949e; }
+button:checked { background-color: #1f6feb; color: #ffffff; border-color: #58a6ff; }
 ";
 
 // ----------------------------------------------------------------- state --
@@ -187,6 +223,7 @@ impl State {
             return;
         }
         buf.set_text("");
+        self.input.grab_focus();
 
         self.rid_seq += 1;
         let rid = format!("gtk-{}-{}", std::time::SystemTime::now()
@@ -246,27 +283,26 @@ fn build_ui(app: &gtk::Application, rt: tokio::runtime::Handle) {
     let panel = gtk::Box::builder().orientation(gtk::Orientation::Vertical).build();
     panel.add_css_class("panel");
 
-    // header
-    let header = gtk::Box::builder().orientation(gtk::Orientation::Horizontal).spacing(6)
-        .build();
-    header.add_css_class("header");
+    // headerbar: CSD title bar, dark-styled, with the live controls
+    let header = gtk::HeaderBar::new();
     let title = gtk::Label::new(None);
+    title.add_css_class("title-dot");
     title.set_markup("<span foreground=\"#58a6ff\">●</span> <span foreground=\"#e6edf3\">sideagent</span>");
     let model_chip = gtk::Label::builder().build();
     model_chip.add_css_class("model");
+    let hbox = gtk::Box::builder().orientation(gtk::Orientation::Horizontal).spacing(8).build();
+    hbox.append(&title);
+    hbox.append(&model_chip);
+    header.set_title_widget(Some(&hbox));
     let attach = gtk::ToggleButton::builder().label("📎").build();
-    attach.set_tooltip_text(Some("attach screenshot"));
+    attach.set_tooltip_text(Some("attach screenshot of the screen"));
+    attach.set_valign(gtk::Align::Center);
     let new_btn = gtk::Button::builder().label("＋").build();
     new_btn.set_tooltip_text(Some("new session"));
-    let close_btn = gtk::Button::builder().label("✕").build();
-    let spacer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-    spacer.set_hexpand(true);
-    header.append(&title);
-    header.append(&model_chip);
-    header.append(&spacer);
-    header.append(&attach);
-    header.append(&new_btn);
-    header.append(&close_btn);
+    new_btn.set_valign(gtk::Align::Center);
+    header.pack_end(&new_btn);
+    header.pack_end(&attach);
+    win.set_titlebar(Some(&header));
 
     // transcript
     let transcript = gtk::Box::builder()
@@ -278,17 +314,16 @@ fn build_ui(app: &gtk::Application, rt: tokio::runtime::Handle) {
     // status + input
     let status = gtk::Label::builder().xalign(0.0).build();
     status.add_css_class("status");
-    let input = gtk::TextView::builder()
-        .wrap_mode(gtk::WrapMode::WordChar)
-        .monospace(true)
-        .pixels_above_lines(4).pixels_below_lines(4)
-        .build();
+    let input = gtk::TextView::new();
+    input.set_wrap_mode(gtk::WrapMode::WordChar);
+    input.set_monospace(true);
+    input.set_pixels_above_lines(4);
+    input.set_pixels_below_lines(4);
     input.set_tooltip_text(Some("Enter send · Shift+Enter newline"));
     let inputrow = gtk::Box::builder().orientation(gtk::Orientation::Horizontal).build();
     inputrow.add_css_class("inputrow");
     inputrow.append(&input);
 
-    panel.append(&header);
     panel.append(&scrolled);
     panel.append(&status);
     panel.append(&inputrow);
@@ -384,11 +419,6 @@ fn build_ui(app: &gtk::Application, rt: tokio::runtime::Handle) {
         }
     }
 
-    // buttons
-    {
-        let win2 = win.clone();
-        close_btn.connect_clicked(move |_| win2.close());
-    }
     new_btn.connect_clicked({
         let st = state.clone();
         move |_| {
@@ -510,6 +540,9 @@ fn main() -> anyhow::Result<()> {
         .application_id("org.sideagent.Gtk")
         .build();
     app.connect_startup(|_| {
+        if let Some(settings) = gtk::Settings::default() {
+            settings.set_gtk_application_prefer_dark_theme(true);
+        }
         let provider = gtk::CssProvider::new();
         provider.load_from_data(CSS);
         gtk::style_context_add_provider_for_display(
