@@ -34,15 +34,21 @@ pub fn build_request(
     images: &[(usize, PreparedImage)], // (message index in history, prepared image)
     image_cfg: &ImageSection,
     style: Option<&str>,
+    context: Option<&str>,
 ) -> ChatRequest {
     let keep_from = images.len().saturating_sub(image_cfg.keep_images_last);
     let keep: std::collections::HashSet<usize> =
         images[keep_from..].iter().map(|(i, _)| *i).collect();
 
-    let system = match style.and_then(style_note) {
-        Some(note) => format!("{SYSTEM_PROMPT}\n{note}"),
-        None => SYSTEM_PROMPT.into(),
-    };
+    let mut system = SYSTEM_PROMPT.to_string();
+    if let Some(note) = style.and_then(style_note) {
+        system.push('\n');
+        system.push_str(note);
+    }
+    if let Some(ctx) = context.filter(|c| !c.trim().is_empty()) {
+        system.push_str("\nUser runtime context for this question:\n");
+        system.push_str(ctx.trim_end());
+    }
     let mut messages = vec![ChatMessage {
         role: "system".into(),
         parts: vec![ContentPart::Text(system)],
@@ -103,7 +109,7 @@ mod tests {
             msg("user", "q4"),
         ];
         let images = vec![(0, img(1)), (1, img(2)), (2, img(3))];
-        let req = build_request("m", &history, &images, &ImageSection::default(), None);
+        let req = build_request("m", &history, &images, &ImageSection::default(), None, None);
         // system + 4 user
         assert_eq!(req.messages.len(), 5);
         let img_count = req
@@ -131,20 +137,32 @@ mod tests {
     #[test]
     fn no_images_is_just_text() {
         let history = vec![msg("user", "hello"), msg("assistant", "hi")];
-        let req = build_request("m", &history, &[], &ImageSection::default(), None);
+        let req = build_request("m", &history, &[], &ImageSection::default(), None, None);
         assert_eq!(req.messages.len(), 3); // + system
+    }
+
+    #[test]
+    fn runtime_context_lands_in_system_only() {
+        let history = vec![msg("user", "list the files here")];
+        let req = build_request("m", &history, &[], &ImageSection::default(),
+            Some("brief"), Some("working directory: /tmp/proj"));
+        let ContentPart::Text(sys) = &req.messages[0].parts[0] else { panic!("system first") };
+        assert!(sys.contains("working directory: /tmp/proj"));
+        assert!(sys.contains("BRIEF"));
+        let ContentPart::Text(u) = &req.messages[1].parts[0] else { unreachable!() };
+        assert_eq!(u, "list the files here");
     }
 
     #[test]
     fn style_note_appends_to_system_only() {
         let history = vec![msg("user", "hello")];
-        let req = build_request("m", &history, &[], &ImageSection::default(), Some("brief"));
+        let req = build_request("m", &history, &[], &ImageSection::default(), Some("brief"), None);
         let ContentPart::Text(sys) = &req.messages[0].parts[0] else { panic!("system first") };
         assert!(sys.contains("BRIEF"));
         let ContentPart::Text(u) = &req.messages[1].parts[0] else { panic!("user text") };
         assert_eq!(u, "hello"); // question untouched
         // unknown style == no style
-        let req2 = build_request("m", &history, &[], &ImageSection::default(), Some("weird"));
+        let req2 = build_request("m", &history, &[], &ImageSection::default(), Some("weird"), None);
         let ContentPart::Text(sys2) = &req2.messages[0].parts[0] else { unreachable!() };
         assert!(!sys2.contains("BRIEF"));
     }

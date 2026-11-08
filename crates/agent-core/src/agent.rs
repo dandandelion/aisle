@@ -254,6 +254,7 @@ impl Agent {
             opts.get("model").cloned(),
             opts.get("provider").cloned(),
             opts.get("style").cloned(),
+            opts.get("context").cloned(),
             request_id.clone(),
             flag,
         ));
@@ -321,6 +322,7 @@ async fn run_answer(
     model_override: Option<String>,
     provider_name: Option<String>,
     style: Option<String>,
+    context: Option<String>,
     request_id: String,
     cancel: Arc<AtomicBool>,
 ) {
@@ -361,7 +363,7 @@ async fn run_answer(
         }
     };
 
-    let req = context::build_request(&model, &history, &images, &agent.cfg.image, style.as_deref());
+    let req = context::build_request(&model, &history, &images, &agent.cfg.image, style.as_deref(), context.as_deref());
     let started = Instant::now();
     let mut stream = provider.stream(req);
 

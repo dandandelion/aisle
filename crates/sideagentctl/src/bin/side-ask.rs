@@ -69,6 +69,45 @@ struct Cli {
     /// Hide the stats line on stderr.
     #[arg(short = 'q', long)]
     quiet: bool,
+
+    /// Don't tell the agent where the question was asked (cwd, OS, git branch).
+    #[arg(long)]
+    no_context: bool,
+}
+
+/// Per-request runtime context: makes "here" mean the terminal's cwd.
+/// Sent as a system-note, never persisted into conversation history.
+fn env_context() -> String {
+    let mut lines = Vec::new();
+    if let Ok(cwd) = std::env::current_dir() {
+        lines.push(format!("The user asked from an interactive shell whose working directory is: {}", cwd.display()));
+    }
+    if let Ok(os) = std::fs::read_to_string("/etc/os-release") {
+        if let Some(pretty) = os
+            .lines()
+            .find_map(|l| l.strip_prefix("PRETTY_NAME=\"").and_then(|s| s.strip_suffix('"')))
+        {
+            lines.push(format!("OS: {pretty}"));
+        }
+    }
+    if let Ok(shell) = std::env::var("SHELL") {
+        if let Some(name) = shell.rsplit('/').next() {
+            lines.push(format!("Shell: {name}"));
+        }
+    }
+    if let Ok(cwd) = std::env::current_dir() {
+        let out = std::process::Command::new("git")
+            .args(["-C", &cwd.to_string_lossy(), "rev-parse", "--abbrev-ref", "HEAD"])
+            .output();
+        if let Ok(out) = out {
+            if out.status.success() {
+                let branch = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                lines.push(format!("Inside a git repository, branch: {branch}"));
+            }
+        }
+    }
+    lines.push("Commands you suggest will be run by the user in that directory.".into());
+    lines.join("\n")
 }
 
 fn main() -> Result<()> {
@@ -137,6 +176,9 @@ async fn run(cli: Cli, question: String) -> Result<()> {
     opts.insert("request_id".into(), rid.clone());
     if cli.screen {
         opts.insert("attach_screen".into(), "true".into());
+    }
+    if !cli.no_context {
+        opts.insert("context".into(), env_context());
     }
     if let Some(m) = cli.model {
         opts.insert("model".into(), m);
