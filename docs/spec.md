@@ -309,7 +309,8 @@ No FTS in v1; session list is ordered by recency.
 ### 9.4 config.toml (v1 fields)
 
 ```toml
-[provider]        # kind = "openai"|"anthropic"; base_url, model, api_key
+[provider]        # kind = "openai"|"anthropic"; base_url, model, api_key,
+                  # max_tokens = 8192 (output cap; answers cut at it are flagged)
 [capture]         # backend = "auto"|"gnome"|"kwin"|"grim"|"x11"|"portal"; output = "active"
 [ui]              # preferred_frontend, panel_width = 420
 [hotkey]          # toggle = "super+shift+a", attach = "super+shift+s"  (used by X11 grab / portal tiers)
