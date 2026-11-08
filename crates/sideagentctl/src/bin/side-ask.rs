@@ -125,18 +125,19 @@ fn env_context() -> String {
     if let Ok(cwd) = std::env::current_dir() {
         lines.push(format!("The user asked from an interactive shell whose working directory is: {}", cwd.display()));
     }
-    if let Ok(os) = std::fs::read_to_string("/etc/os-release") {
-        if let Some(pretty) = os
-            .lines()
-            .find_map(|l| l.strip_prefix("PRETTY_NAME=\"").and_then(|s| s.strip_suffix('"')))
-        {
-            lines.push(format!("OS: {pretty}"));
-        }
+    // OS: distro pretty-name on Linux, std fallback elsewhere (Windows/mac).
+    match std::fs::read_to_string("/etc/os-release")
+        .ok()
+        .and_then(|os| {
+            os.lines()
+                .find_map(|l| l.strip_prefix("PRETTY_NAME=\"").and_then(|s| s.strip_suffix('"')))
+                .map(str::to_owned)
+        }) {
+        Some(pretty) => lines.push(format!("OS: {pretty}")),
+        None => lines.push(format!("OS: {} ({})", std::env::consts::OS, std::env::consts::ARCH)),
     }
-    if let Ok(shell) = std::env::var("SHELL") {
-        if let Some(name) = shell.rsplit('/').next() {
-            lines.push(format!("Shell: {name}"));
-        }
+    if let Some(shell) = detect_shell() {
+        lines.push(format!("The user's live shell is: {shell} — reply with commands valid in THAT shell (PowerShell/cmd syntax on Windows, POSIX syntax on Unix)."));
     }
     if let Ok(cwd) = std::env::current_dir() {
         let out = std::process::Command::new("git")
@@ -155,6 +156,42 @@ fn env_context() -> String {
         the user asks you to do something, DO it by outputting the command — \
         never say you cannot run things.".into());
     lines.join("\n")
+}
+
+/// The shell actually running side-ask (not $SHELL, which is the login
+/// shell). Unix: parent process name via /proc. Windows: env heuristics.
+fn detect_shell() -> Option<String> {
+    #[cfg(unix)]
+    {
+        let status = std::fs::read_to_string("/proc/self/status").ok()?;
+        let ppid = status
+            .lines()
+            .find_map(|l| l.strip_prefix("PPid:"))?
+            .trim()
+            .to_string();
+        let comm = std::fs::read_to_string(format!("/proc/{ppid}/comm")).ok()?;
+        let comm = comm.trim().to_string();
+        // side-ask launched via a wrapper (sh -c, cargo run…) — fall back
+        // to $SHELL unless the parent looks like a real shell.
+        const SHELLS: [&str; 8] = ["bash", "zsh", "fish", "sh", "dash", "nu", "tcsh", "csh"];
+        if SHELLS.contains(&comm.as_str()) {
+            return Some(comm);
+        }
+        let login = std::env::var("SHELL").ok()?;
+        return login.rsplit('/').next().map(str::to_owned);
+    }
+    #[cfg(windows)]
+    {
+        if std::env::var_os("PSModulePath").is_some() {
+            return Some("powershell".into());
+        }
+        let comspec = std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".into());
+        return comspec.rsplit(['\\', '/']).next().map(str::to_owned);
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        None
+    }
 }
 
 async fn run(cli: Cli, question: String) -> Result<()> {
@@ -386,13 +423,32 @@ fn confirm_run(block: &str) -> bool {
     confirm(&format!("   in {cwd}?"))
 }
 
-/// Run a command block exactly where the user is typing. Interactive
-/// commands (sudo password, editors…) are not supported in v1.
+/// Run a command block exactly where the user is typing, through the
+/// platform's shell. Interactive commands (sudo password, editors…) are
+/// not supported in v1.
 fn run_cmd(block: &str) -> (i32, String) {
-    let out = std::process::Command::new("sh")
-        .arg("-c")
-        .arg(block)
-        .output();
+    #[cfg(windows)]
+    let mut cmd = {
+        // match the shell the answer was written for
+        let mut c = if std::env::var_os("PSModulePath").is_some() {
+            let mut c = std::process::Command::new("powershell");
+            c.args(["-NoProfile", "-NonInteractive", "-Command", block]);
+            c
+        } else {
+            let comspec = std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".into());
+            let mut c = std::process::Command::new(comspec);
+            c.arg("/C").arg(block);
+            c
+        };
+        c
+    };
+    #[cfg(not(windows))]
+    let mut cmd = {
+        let mut c = std::process::Command::new("sh");
+        c.arg("-c").arg(block);
+        c
+    };
+    let out = cmd.output();
     match out {
         Ok(o) => {
             let mut combined = String::from_utf8_lossy(&o.stdout).into_owned();
