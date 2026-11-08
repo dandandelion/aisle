@@ -2,12 +2,14 @@
 //!
 //!   side-ask what was the command to list listening sockets again
 //!   side-ask -e  explain ffmpeg concat while I'm at it
+//!   side-ask -r  how do I clean up old docker images   # offers to RUN it (Y/n)
 //!   git log --oneline -50 | side-ask "any of these look like the release commit?"
 //!
 //! Default style is *brief* (just the answer); `-e/--explain` asks for a
 //! compact explanation + a memorable tip. Each run opens its own titled
 //! session; `-c/--continue` reuses the previous side-ask session for
-//! follow-ups.
+//! follow-ups. `-r/--run` turns suggested commands into offer-to-execute
+//! prompts — the model never runs anything you don't approve.
 
 use std::collections::HashMap;
 use std::io::{IsTerminal, Read, Write};
@@ -58,6 +60,11 @@ struct Cli {
     #[arg(short = 'c', long)]
     cont: bool,
 
+    /// Offer to execute commands the agent suggests (each one gated by Y/n).
+    /// If one fails, offers to let the agent diagnose and fix it (max 2 rounds).
+    #[arg(short = 'r', long)]
+    run: bool,
+
     /// Attach a screenshot of the current screen as context.
     #[arg(long)]
     screen: bool,
@@ -73,41 +80,6 @@ struct Cli {
     /// Don't tell the agent where the question was asked (cwd, OS, git branch).
     #[arg(long)]
     no_context: bool,
-}
-
-/// Per-request runtime context: makes "here" mean the terminal's cwd.
-/// Sent as a system-note, never persisted into conversation history.
-fn env_context() -> String {
-    let mut lines = Vec::new();
-    if let Ok(cwd) = std::env::current_dir() {
-        lines.push(format!("The user asked from an interactive shell whose working directory is: {}", cwd.display()));
-    }
-    if let Ok(os) = std::fs::read_to_string("/etc/os-release") {
-        if let Some(pretty) = os
-            .lines()
-            .find_map(|l| l.strip_prefix("PRETTY_NAME=\"").and_then(|s| s.strip_suffix('"')))
-        {
-            lines.push(format!("OS: {pretty}"));
-        }
-    }
-    if let Ok(shell) = std::env::var("SHELL") {
-        if let Some(name) = shell.rsplit('/').next() {
-            lines.push(format!("Shell: {name}"));
-        }
-    }
-    if let Ok(cwd) = std::env::current_dir() {
-        let out = std::process::Command::new("git")
-            .args(["-C", &cwd.to_string_lossy(), "rev-parse", "--abbrev-ref", "HEAD"])
-            .output();
-        if let Ok(out) = out {
-            if out.status.success() {
-                let branch = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                lines.push(format!("Inside a git repository, branch: {branch}"));
-            }
-        }
-    }
-    lines.push("Commands you suggest will be run by the user in that directory.".into());
-    lines.join("\n")
 }
 
 fn main() -> Result<()> {
@@ -141,6 +113,41 @@ fn compose_question(cli: &Cli) -> Result<String> {
     Ok(q)
 }
 
+/// Per-request runtime context: makes "here" mean the terminal's cwd.
+/// Sent as a system-note, never persisted into conversation history.
+fn env_context() -> String {
+    let mut lines = Vec::new();
+    if let Ok(cwd) = std::env::current_dir() {
+        lines.push(format!("The user asked from an interactive shell whose working directory is: {}", cwd.display()));
+    }
+    if let Ok(os) = std::fs::read_to_string("/etc/os-release") {
+        if let Some(pretty) = os
+            .lines()
+            .find_map(|l| l.strip_prefix("PRETTY_NAME=\"").and_then(|s| s.strip_suffix('"')))
+        {
+            lines.push(format!("OS: {pretty}"));
+        }
+    }
+    if let Ok(shell) = std::env::var("SHELL") {
+        if let Some(name) = shell.rsplit('/').next() {
+            lines.push(format!("Shell: {name}"));
+        }
+    }
+    if let Ok(cwd) = std::env::current_dir() {
+        let out = std::process::Command::new("git")
+            .args(["-C", &cwd.to_string_lossy(), "rev-parse", "--abbrev-ref", "HEAD"])
+            .output();
+        if let Ok(out) = out {
+            if out.status.success() {
+                let branch = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                lines.push(format!("Inside a git repository, branch: {branch}"));
+            }
+        }
+    }
+    lines.push("Commands you suggest will be offered to the user for execution in that directory.".into());
+    lines.join("\n")
+}
+
 async fn run(cli: Cli, question: String) -> Result<()> {
     let conn = zbus::Connection::session().await
         .context("no session bus: is sideagentd running (systemctl --user status sideagentd)?")?;
@@ -168,96 +175,235 @@ async fn run(cli: Cli, question: String) -> Result<()> {
     };
     std::fs::write(&marker, &session_id).ok();
 
-    let mut opts = HashMap::new();
-    opts.insert("style".into(), if cli.explain { "explain".into() } else { "brief".into() });
-    // Pre-declare the request id: fast providers can emit Done before the
-    // Ask reply lands, so correlation must not depend on reply order.
-    let rid = uuid::Uuid::new_v4().to_string();
-    opts.insert("request_id".into(), rid.clone());
-    if cli.screen {
-        opts.insert("attach_screen".into(), "true".into());
+    if cli.run && !std::io::stdin().is_terminal() {
+        note("--run needs an interactive terminal; answering without it");
     }
-    if !cli.no_context {
-        opts.insert("context".into(), env_context());
-    }
-    if let Some(m) = cli.model {
-        opts.insert("model".into(), m);
-    }
+    let run_mode = cli.run && std::io::stdin().is_terminal();
 
-    // Subscribe BEFORE Ask so no signal can slip past us.
+    let style: String = if cli.explain { "explain".into() } else { "brief".into() };
+    let mut question = question;
+    let mut first_round = true;
+    let mut diagnose_rounds = 0u32;
+
+    // Subscribe BEFORE any Ask so no signal can slip past us. Streams live
+    // across rounds; each round filters on its own request id.
     let mut delta = proxy.receive_delta().await?;
     let mut done = proxy.receive_done().await?;
     let mut failed = proxy.receive_failed().await?;
     let mut capture = proxy.receive_capture_attached().await?;
 
-    proxy.ask(&session_id, &question, opts).await?;
-
-    let tty = std::io::stdout().is_terminal() && std::env::var_os("NO_COLOR").is_none();
-    let mut renderer = Renderer::new(tty);
-    let code = loop {
-        tokio::select! {
-            ev = delta.next() => {
-                if let Some(d) = ev {
-                    let body = d.args().unwrap();
-                    if *body.request_id() == rid {
-                        renderer.push(body.text().as_ref());
-                        std::io::stdout().flush().ok();
-                    }
-                }
-            }
-            ev = capture.next() => {
-                if let Some(d) = ev {
-                    let body = d.args().unwrap();
-                    if *body.request_id() == rid {
-                        note(&format!("attached screenshot {}x{} ({} KB)", body.width(), body.height(), body.bytes() / 1024));
-                    }
-                }
-            }
-            ev = done.next() => {
-                if let Some(d) = ev {
-                    let body = d.args().unwrap();
-                    if *body.request_id() == rid {
-                        renderer.finish();
-                        let u = body.usage();
-                        if !cli.quiet {
-                            note(&format!(
-                                "{} · {} ms · {}/{} tok · session {} (side-ask -c to continue)",
-                                u.get("model").map(String::as_str).unwrap_or("?"),
-                                u.get("ms").map(String::as_str).unwrap_or("?"),
-                                u.get("in").map(String::as_str).unwrap_or("?"),
-                                u.get("out").map(String::as_str).unwrap_or("?"),
-                                short(&session_id),
-                            ));
-                        }
-                        break 0;
-                    }
-                }
-            }
-            ev = failed.next() => {
-                if let Some(d) = ev {
-                    let body = d.args().unwrap();
-                    if *body.request_id() == rid {
-                        renderer.finish_nl();
-                        eprintln!("error [{}]: {}", body.kind(), body.message());
-                        break 1;
-                    }
-                }
-            }
-            _ = tokio::signal::ctrl_c() => {
-                proxy.cancel(&rid).await.ok();
-                renderer.finish_nl();
-                note("cancelled (partial answer kept in the session)");
-                break 130;
+    let exit_code = loop {
+        // opts per round: attach/screen/context only on the first round;
+        // style every round (diagnosis should keep the same voice).
+        let mut opts = HashMap::new();
+        opts.insert("style".into(), style.clone());
+        // Pre-declare the request id: fast providers can emit Done before the
+        // Ask reply lands, so correlation must not depend on reply order.
+        let rid = uuid::Uuid::new_v4().to_string();
+        opts.insert("request_id".into(), rid.clone());
+        if first_round {
+            if cli.screen {
+                opts.insert("attach_screen".into(), "true".into());
             }
         }
+        if !cli.no_context {
+            opts.insert("context".into(), env_context());
+        }
+        if let Some(m) = &cli.model {
+            opts.insert("model".into(), m.clone());
+        }
+        first_round = false;
+
+        proxy.ask(&session_id, &question, opts).await?;
+
+        let tty = std::io::stdout().is_terminal() && std::env::var_os("NO_COLOR").is_none();
+        let mut renderer = Renderer::new(tty);
+        let mut full = String::new();
+        let code = loop {
+            tokio::select! {
+                ev = delta.next() => {
+                    if let Some(d) = ev {
+                        let body = d.args().unwrap();
+                        if *body.request_id() == rid {
+                            let t = body.text().as_ref();
+                            full.push_str(t);
+                            renderer.push(t);
+                            std::io::stdout().flush().ok();
+                        }
+                    }
+                }
+                ev = capture.next() => {
+                    if let Some(d) = ev {
+                        let body = d.args().unwrap();
+                        if *body.request_id() == rid {
+                            note(&format!("attached screenshot {}x{} ({} KB)", body.width(), body.height(), body.bytes() / 1024));
+                        }
+                    }
+                }
+                ev = done.next() => {
+                    if let Some(d) = ev {
+                        let body = d.args().unwrap();
+                        if *body.request_id() == rid {
+                            renderer.finish();
+                            let u = body.usage();
+                            if !cli.quiet {
+                                note(&format!(
+                                    "{} · {} ms · {}/{} tok · session {} (side-ask -c to continue)",
+                                    u.get("model").map(String::as_str).unwrap_or("?"),
+                                    u.get("ms").map(String::as_str).unwrap_or("?"),
+                                    u.get("in").map(String::as_str).unwrap_or("?"),
+                                    u.get("out").map(String::as_str).unwrap_or("?"),
+                                    short(&session_id),
+                                ));
+                            }
+                            break 0;
+                        }
+                    }
+                }
+                ev = failed.next() => {
+                    if let Some(d) = ev {
+                        let body = d.args().unwrap();
+                        if *body.request_id() == rid {
+                            renderer.finish_nl();
+                            eprintln!("error [{}]: {}", body.kind(), body.message());
+                            break 1;
+                        }
+                    }
+                }
+                _ = tokio::signal::ctrl_c() => {
+                    proxy.cancel(&rid).await.ok();
+                    renderer.finish_nl();
+                    note("cancelled (partial answer kept in the session)");
+                    break 130;
+                }
+            }
+        };
+        if code != 0 {
+            break code;
+        }
+        if !run_mode {
+            break 0;
+        }
+
+        // Offer each fenced command block the agent suggested.
+        let mut last_fail: Option<(String, i32, String)> = None;
+        for block in extract_fenced(&full) {
+            if !confirm_run(&block) {
+                continue;
+            }
+            let (c, out) = run_cmd(&block);
+            println!("{}", out.trim_end());
+            note(&format!("exit {c}"));
+            if c != 0 {
+                last_fail = Some((block, c, out));
+            }
+        }
+
+        match last_fail {
+            Some((block, c, out)) if diagnose_rounds < 2 => {
+                if !confirm(&format!(
+                    "that command failed (exit {c}). want me to diagnose and fix it?"
+                )) {
+                    break 0;
+                }
+                diagnose_rounds += 1;
+                question = format!(
+                    "I ran the command you suggested:\n```\n{block}\n```\n\
+                     It exited with code {c}. Its output (possibly clipped):\n```\n{}\n```\n\
+                     Diagnose briefly and give the corrected command.",
+                    clip(&out, 3000)
+                );
+            }
+            _ => break 0,
+        }
     };
+
     if let Some(n) = session_note {
         eprintln!("note: {n}");
     }
-    if code != 0 {
-        std::process::exit(code);
+    if exit_code != 0 {
+        std::process::exit(exit_code);
     }
     Ok(())
+}
+
+
+/// Fenced ``` blocks from the raw markdown answer, as executable units.
+fn extract_fenced(md: &str) -> Vec<String> {
+    let mut blocks = Vec::new();
+    let mut cur: Option<String> = None;
+    for line in md.lines() {
+        if line.trim_start().starts_with("```") {
+            match cur.take() {
+                Some(b) => {
+                    let b = b.trim_end();
+                    if !b.trim().is_empty() {
+                        blocks.push(b.to_string());
+                    }
+                }
+                None => cur = Some(String::new()),
+            }
+        } else if let Some(b) = cur.as_mut() {
+            b.push_str(line);
+            b.push('\n');
+        }
+    }
+    blocks
+}
+
+fn confirm(prompt: &str) -> bool {
+    if !std::io::stdin().is_terminal() {
+        return false;
+    }
+    eprint!("{prompt} [Y/n] ");
+    std::io::stderr().flush().ok();
+    let mut line = String::new();
+    if std::io::stdin().read_line(&mut line).unwrap_or(0) == 0 {
+        return false; // EOF: treat as no
+    }
+    let a = line.trim().to_lowercase();
+    a.is_empty() || a == "y" || a == "yes"
+}
+
+fn confirm_run(block: &str) -> bool {
+    println!();
+    println!("⚡ agent suggests running:");
+    for line in block.lines() {
+        println!("   {line}");
+    }
+    let cwd = std::env::current_dir().map(|p| p.display().to_string()).unwrap_or_default();
+    confirm(&format!("   in {cwd}?"))
+}
+
+/// Run a command block exactly where the user is typing. Interactive
+/// commands (sudo password, editors…) are not supported in v1.
+fn run_cmd(block: &str) -> (i32, String) {
+    let out = std::process::Command::new("sh")
+        .arg("-c")
+        .arg(block)
+        .output();
+    match out {
+        Ok(o) => {
+            let mut combined = String::from_utf8_lossy(&o.stdout).into_owned();
+            let err = String::from_utf8_lossy(&o.stderr).into_owned();
+            if !err.trim().is_empty() {
+                if !combined.is_empty() {
+                    combined.push('\n');
+                }
+                combined.push_str(&err);
+            }
+            (o.status.code().unwrap_or(1), combined)
+        }
+        Err(e) => (127, format!("could not spawn command: {e}")),
+    }
+}
+
+fn clip(s: &str, max: usize) -> String {
+    if s.len() <= max {
+        return s.to_string();
+    }
+    let mid = max / 2;
+    format!("{}\n… {} chars clipped …\n{}", &s[..mid], s.len() - 2 * mid, &s[s.len() - mid..])
 }
 
 fn session_title(question: &str) -> String {
