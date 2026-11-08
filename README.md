@@ -1,103 +1,125 @@
 # aisle
 
-*formerly sideagent, renamed 2026-11-08.* `aisle` is the project and command;
-**`psst` is a shell alias** for `aisle` (same binary, two names) — `psst list
-the files` and `aisle list the files` are identical. The name sits in the
-"aisle beside your screen" sense: a quiet panel at the side, one hotkey away.
+**A quiet AI at the edge of your Linux screen.** One hotkey opens a chat
+panel that floats beside what you're doing — ask questions, optionally
+attach a screenshot of your screen as context, and let it run commands
+for you *only when you say yes*. There's also a terminal voice:
+`psst what was that tar flag again`.
 
-A minimal, hotkey-away AI side panel for Linux. One global hotkey opens a
-floating overlay on the edge of your screen — it never takes over your
-desktop, never steals your window layout, and disappears as fast as it
-appeared. You chat with a multimodal model and, when you want, attach a
-screenshot of your actual screen as context.
+*Renamed from `sideagent` (2026-11-08). `psst` is a second name for the
+same CLI binary — `psst …` and `aisle …` are identical.*
 
-> Status: **M0 + M1 shipped and live-tested; M4 (GNOME extension)
-> verified headless end-to-end, awaiting one logout to activate on the
-> real session.** `aisled` runs as a systemd user service now
-> (degraded until `~/.config/aisle/config.toml` exists — run
-> `aislectl status` to see the hint). Build order + acceptance
-> criteria in [docs/plan.md](docs/plan.md); rationale in
-> [docs/decisions.md](docs/decisions.md).
+## What you get
 
-## The shape of it
+- **Global hotkey → floating side panel.** On GNOME: a shell extension
+  draws a real overlay that never interferes with your windows. On any
+  other desktop: a GTK4 window (WM decides where).
+- **Optional screen context** — per-message opt-in; the panel shows a
+  thumbnail of exactly what will be sent before you send it.
+- **Terminal-first questions** — `aisle`/`psst` answer from your shell,
+  aware of your cwd, OS, shell and git state; suggested commands come
+  with a `Y/n` offer to actually run them, and if one fails it offers to
+  diagnose and fix it.
+- **Local-first** — one resident Rust daemon (`aisled`) holds all state;
+  sessions live in a local SQLite DB; API key stays in a `chmod 600`
+  config. No telemetry, no accounts.
+
+## Architecture
 
 ```
-┌──────────────────────────────┐
-│  aisled (resident, Rust) │   all real logic, portable
-│  chat sessions · providers   │
-│  screen capture · image pipe │
-│  D-Bus service               │
-└──────────────┬───────────────┘
-               │ D-Bus (session bus)
-   ┌───────────┼───────────────┐
-   ▼           ▼               ▼
-GNOME Shell  GTK4 +        GTK4 window /
-extension    layer-shell    X11 fallback
-(GNOME)      (KDE, wlroots) (X11 WMs)
+┌──────────────┐  D-Bus (org.aisle.Agent1)  ┌────────────────────────┐
+│ frontends    │ ─────────────────────────► │ aisled (resident)      │
+│ • gnome ext  │   streaming deltas,        │ • agent-core (Rust)    │
+│ • GTK4 app   │   signals, session ops     │   provider adapters:   │
+│ • aisle/psst │                            │   OpenAI-compat,       │
+│ • aislectl   │                            │   Anthropic            │
+└──────────────┘                            │ • sessions (sqlite)    │
+                                            │ • capture (portal/grim)│
+                                            └────────────────────────┘
 ```
 
-The daemon is the product. The overlay frontends are thin,
-environment-specific shells — which is what makes "Linux only for now,
-other OSes later" an honest statement rather than a hope.
-
-## Environment support (v1 target)
-
-| Environment | Overlay | Global hotkey | Screenshot |
+| Desktop | Panel | Hotkey | Capture |
 |---|---|---|---|
-| GNOME (Wayland/X11) | Shell extension (native stage overlay) | extension keybinding | in-shell capture (≥47 locks the D-Bus screenshot API from apps) |
-| KDE Plasma (Wayland/X11) | GTK4 + `gtk4-layer-shell` | portal `GlobalShortcuts` / user shortcut | `org.kde.kwin.Screenshot` |
-| wlroots — Sway, Hyprland, Wayfire | GTK4 + `gtk4-layer-shell` | compositor keybind / portal `GlobalShortcuts` | `grim` (wlr-screencopy) |
-| X11 window managers — i3, bspwm, openbox, awesome | GTK4 X11 window (`keep-above` + sticky + positioned) | daemon `XGrabKey` (xcb) | xcb root-window capture |
-| GNOME without the extension | GTK4 window, WM-decided position (helper extension optional) | portal / `aislectl toggle` | `org.gnome.Shell.Screenshot` |
-| Anything else Wayland | GTK4 window | `aislectl toggle` bound by user | xdg-desktop-portal (prompts — last resort) |
+| GNOME (50) | extension overlay, side-anchored | extension keybinding (`Super+Shift+A`) | `org.gnome.Shell.Screenshot` |
+| Other Wayland | GTK4 window | `aislectl toggle` bound by you | xdg-desktop-portal (or `grim`) |
+| X11 | GTK4 window | planned XGrabKey | `maim` |
+| Headless / terminal only | `aisle` / `psst` | — | — |
 
-## Try it (current state)
+## Setup
+
+Requirements: Linux, a Rust toolchain (if `cargo` isn't on PATH,
+`scripts/env.sh` bootstraps one into `./.toolchain`), and an
+**image-capable model** if you want screen context (any
+OpenAI-compatible endpoint — Ollama, LM Studio, vLLM, OpenRouter,
+OpenAI — or Anthropic).
 
 ```bash
-# daemon (already installed + enabled on this box):
-aislectl status                       # degraded until configured
-mkdir -p ~/.config/aisle && cp config.example.toml ~/.config/aisle/config.toml
-$EDITOR ~/.config/aisle/config.toml   # set provider.model + api_key
+git clone https://github.com/dandandelion/aisle.git && cd aisle
+./install.sh            # builds release, installs binaries, systemd
+                        # user service (aisle.service), GNOME extension
+mkdir -p ~/.config/aisle
+cp config.example.toml ~/.config/aisle/config.toml
+$EDITOR ~/.config/aisle/config.toml   # provider kind/model/base_url/api_key
 chmod 600 ~/.config/aisle/config.toml
-systemctl --user restart aisled
-aislectl ask --screen "what is this?" # terminal chat with screen context
-
-# overlay (GNOME extension — needs ONE logout for GNOME 50 to load it):
-gnome-extensions enable org.aisle     # after next login
-# Super+Shift+A toggle · Super+Shift+S attach-screen · Esc close
-
-# live-tune the composer prompt (reopen panel to apply):
-gsettings set org.gnome.shell.extensions.aisle prompt-y 6
-
-# aisle — quick question right from the terminal (no quotes needed):
-aisle how do I undo the last git commit      # brief: just the command
-aisle -e how do I undo the last git commit   # teach: answer + why + a tip
-aisle -c but what if i already pushed it     # follow-up, same conversation
-aisle how do I clean up old docker images    # in a terminal, each suggestion is
-                                                # offered to RUN (Y/n); failures can
-                                                # be diagnosed+fixed — -R disables this
-git log --oneline -50 | aisle which of these is the release commit
-aisle --screen what app is drawing this window
+systemctl --user restart aisle
+aislectl status         # provider = openai:<model>, capture_backends=…
 ```
 
-## Documentation map
+**GNOME:** log out and back in (new extensions load at login), then
+`gnome-extensions enable org.aisle`. `Super+Shift+A` toggles the panel,
+`Super+Shift+S` attaches the current screen to your next message.
+Tune the panel with `gsettings set org.gnome.shell.extensions.aisle
+prompt-size 14` (also `prompt-y`, `panel-width`, the shortcut keys).
 
-- [docs/spec.md](docs/spec.md) — what we are building: UX contract, architecture,
-  D-Bus protocol, capture/hotkey matrices, data model, privacy, non-goals.
-- [docs/plan.md](docs/plan.md) — how and when: milestones with acceptance
-  criteria, ordering rationale, test strategy, risk register, packaging.
-- [docs/decisions.md](docs/decisions.md) — why: ADR-style record of the
-  architecture choices and their tradeoffs.
+**Other desktops:** run `aisle-gtk`; bind any key to `aislectl toggle`.
 
-## Design principles
+## The terminal voice
 
-1. **Daemon-first.** A resident daemon holds all state; frontends are dumb.
-   Hotkey → visible in well under 100 ms because nothing spawns.
-2. **One protocol, many shells.** The D-Bus API is the only coupling. A new
-   DE/OS frontend is a few hundred lines, never a fork.
-3. **Never interfere.** The overlay floats above everything but reserves no
-   space, keeps no persistent focus, and vanishes on Esc. Your desktop is
-   yours.
-4. **Screenshots only on explicit opt-in**, per message, visibly indicated.
-5. **Boring storage.** One SQLite file plus a folder of images. Back it up
-   by copying, delete it to forget.
+```bash
+psst how do I undo the last git commit       # brief: just the command
+aisle -e how do I undo the last git commit   # teach: answer + why + a tip
+aisle -c but what if i already pushed it     # follow-up, same session
+psst --screen what's this error in my terminal
+git log --oneline -50 | psst "which of these was the release?"
+```
+
+In a terminal, every fenced command the agent suggests comes with a
+`Y/n` run offer (it never runs anything unprompted; `-R` opts out, `-r`
+explicitly opts in). A failed command offers a diagnose-and-fix round.
+More: `aisle --help`.
+
+## Configuration
+
+Single file, `~/.config/aisle/config.toml` — see
+[config.example.toml](config.example.toml):
+
+- `[provider]` — `kind`, `model`, `base_url`, `api_key`,
+  `max_tokens` (output cap; long answers ending with a `⚠ TRUNCATED`
+  note mean raise it), plus `[provider.named.*]` extras selectable with
+  `--provider`.
+- `[capture]` — screenshot backend preference.
+- `[image]` — client-side downscale before upload.
+- Env overrides: `AISLE_API_KEY`, `AISLE_CONFIG`, `AISLE_DATA`.
+
+## Privacy & safety
+
+- Screenshots are taken **only** when you opted in for that message,
+  with a visible preview of what goes out.
+- Agent-suggested commands require an explicit `Y/n`; nothing executes
+  without you.
+- Conversation history is a local SQLite file
+  (`~/.local/share/aisle/sessions.db`). No telemetry, no crash reports,
+  nothing leaves the machine except the provider request you triggered.
+
+## Development
+
+```bash
+cargo test --workspace          # unit + wire-contract tests
+.dev/nested-test.sh             # full nested GNOME session selftest
+```
+
+Design docs: [docs/spec.md](docs/spec.md), decision records in
+[docs/decisions.md](docs/decisions.md). Current milestone: M2 shipped
+(daemon, GNOME overlay, GTK4 app, CLI); M3 = portal-level global
+shortcuts for the GTK tier. The Windows story is designed for in the
+spec but not built.

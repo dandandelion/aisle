@@ -5,5 +5,6 @@
 !docs/**/*.png
 /.dev/*
 !/.dev/*.sh
+!/.dev/config.toml
 !/.dev/mockprovider.py
 *.zip
