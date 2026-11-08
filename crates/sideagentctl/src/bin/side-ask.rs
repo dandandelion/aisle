@@ -8,8 +8,9 @@
 //! Default style is *brief* (just the answer); `-e/--explain` asks for a
 //! compact explanation + a memorable tip. Each run opens its own titled
 //! session; `-c/--continue` reuses the previous side-ask session for
-//! follow-ups. `-r/--run` turns suggested commands into offer-to-execute
-//! prompts — the model never runs anything you don't approve.
+//! follow-ups. In a terminal, every suggested command comes with an
+//! offer-to-execute prompt (Y/n) — the model never runs anything you don't
+//! approve; `-R/--no-run` disables offers, `-r` stays as explicit opt-in.
 
 use std::collections::HashMap;
 use std::io::{IsTerminal, Read, Write};
@@ -60,10 +61,14 @@ struct Cli {
     #[arg(short = 'c', long)]
     cont: bool,
 
-    /// Offer to execute commands the agent suggests (each one gated by Y/n).
-    /// If one fails, offers to let the agent diagnose and fix it (max 2 rounds).
+    /// Kept for explicitness: execution offers are already the default when
+    /// side-ask runs in a terminal. (See --no-run.)
     #[arg(short = 'r', long)]
     run: bool,
+
+    /// Never offer to execute suggested commands (copy-paste mode).
+    #[arg(short = 'R', long, conflicts_with = "run")]
+    no_run: bool,
 
     /// Attach a screenshot of the current screen as context.
     #[arg(long)]
@@ -144,7 +149,11 @@ fn env_context() -> String {
             }
         }
     }
-    lines.push("Commands you suggest will be offered to the user for execution in that directory.".into());
+    lines.push("IMPORTANT: this is side-ask — any command you output in a code \
+        fence is OFFERED to the user for immediate execution (they confirm each \
+        one with Y/n, and failed runs can be sent back to you to diagnose). So if \
+        the user asks you to do something, DO it by outputting the command — \
+        never say you cannot run things.".into());
     lines.join("\n")
 }
 
@@ -175,10 +184,12 @@ async fn run(cli: Cli, question: String) -> Result<()> {
     };
     std::fs::write(&marker, &session_id).ok();
 
-    if cli.run && !std::io::stdin().is_terminal() {
+    // Execution offers are ON by default in a terminal (always Y/n-gated);
+    // --no-run opts out, and piped mode can't prompt so it's off there.
+    let run_mode = std::io::stdin().is_terminal() && !cli.no_run;
+    if cli.run && !run_mode {
         note("--run needs an interactive terminal; answering without it");
     }
-    let run_mode = cli.run && std::io::stdin().is_terminal();
 
     let style: String = if cli.explain { "explain".into() } else { "brief".into() };
     let mut question = question;
