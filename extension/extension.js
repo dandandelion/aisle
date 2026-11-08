@@ -81,8 +81,12 @@ class Panel {
         const spacer = new St.Label({ text: '', x_expand: true });
         header.add_child(spacer);
 
-        this._attachBtn = new St.Button({ style_class: 'aisle-button', label: '📎', toggleMode: true });
-        this._attachBtn.add_tooltip?.('attach screen to next message');
+        this._attachBtn = new St.Button({
+            style_class: 'aisle-button',
+            toggleMode: true,
+            child: new St.Icon({ icon_name: 'video-display-symbolic', style_class: 'aisle-attach-icon' }),
+        });
+        this._attachBtn.set_tooltip_text('Use screen as context');
         header.add_child(this._attachBtn);
 
         const newBtn = new St.Button({ style_class: 'aisle-button', label: '＋' });
@@ -261,7 +265,8 @@ class Panel {
     armAttach() {
         if (!this._visible)
             this.open();
-        this._attachBtn.checked = !this._attachBtn.checked;
+        // hotkey ARMS context (predictable); the header button toggles off
+        this._attachBtn.checked = true;
         this._entry.grab_key_focus();
     }
 
@@ -515,7 +520,7 @@ class Panel {
 
 export default class SideagentExtension extends Extension {
     enable() {
-        log('aisle: extension build 2026-11-08.rename');
+        log('aisle: extension build 2026-11-09.hotkeys');
         const width = this.getSettings().get_int('panel-width');
         this._panel = new Panel(width, this.getSettings());
 
@@ -542,8 +547,21 @@ export default class SideagentExtension extends Extension {
             (global.display.remove_keybinding ?? Meta.remove_keybinding).call(
                 global.display.remove_keybinding ? global.display : Meta, name);
 
-        this._addBinding('toggle-shortcut', () => this._panel.toggle());
-        this._addBinding('attach-shortcut', () => this._panel.armAttach());
+        // GNOME 50 display-level bindings fire on press AND release, and
+        // auto-repeat while held. Swallow everything within the window so
+        // one physical tap = exactly one action.
+        const oneShot = (fn, ms = 750) => {
+            let last = 0;
+            return () => {
+                const now = GLib.get_monotonic_time();
+                const fresh = now - last >= ms * 1000;
+                last = now; // rolling: while a hold keeps firing, keep suppressing
+                if (fresh)
+                    fn();
+            };
+        };
+        this._addBinding('toggle-shortcut', oneShot(() => this._panel.toggle()));
+        this._addBinding('attach-shortcut', oneShot(() => this._panel.armAttach()));
 
         // announce ourselves; daemon suppresses other frontends
         try {
