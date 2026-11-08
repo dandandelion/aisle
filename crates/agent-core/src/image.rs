@@ -117,7 +117,7 @@ mod tests {
 
     #[test]
     fn original_store_is_content_addressed() {
-        let dir = std::env::temp_dir().join(format!("sideagent-img-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("aisle-img-{}", std::process::id()));
         let png = synthetic_png(10, 10, false);
         let a = store_original(&dir, &png).unwrap();
         let b = store_original(&dir, &png).unwrap();

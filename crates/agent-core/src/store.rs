@@ -231,7 +231,7 @@ mod tests {
     use super::*;
 
     fn temp_store(tag: &str) -> (Store, std::path::PathBuf) {
-        let dir = std::env::temp_dir().join(format!("sideagent-store-test-{tag}"));
+        let dir = std::env::temp_dir().join(format!("aisle-store-test-{tag}"));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         (Store::open(&dir.join("s.db")).unwrap(), dir)

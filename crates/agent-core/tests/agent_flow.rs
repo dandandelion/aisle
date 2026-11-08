@@ -22,7 +22,7 @@ api_key = "k"
 
 #[tokio::test]
 async fn ask_persists_both_turns() {
-    let dir = std::env::temp_dir().join(format!("sideagent-flow-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("aisle-flow-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let store = Store::open(&dir.join("s.db")).unwrap();
@@ -50,7 +50,7 @@ async fn ask_persists_both_turns() {
 
 #[tokio::test]
 async fn attach_screen_fails_cleanly_without_backends() {
-    let dir = std::env::temp_dir().join(format!("sideagent-nocap-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("aisle-nocap-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let store = Store::open(&dir.join("s.db")).unwrap();
@@ -68,7 +68,7 @@ async fn attach_screen_fails_cleanly_without_backends() {
 
 #[tokio::test]
 async fn frontend_registration_first_wins() {
-    let dir = std::env::temp_dir().join(format!("sideagent-fe-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("aisle-fe-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let agent = Agent::for_test(cfg(), Store::open(&dir.join("s.db")).unwrap(), Arc::new(MockProvider { reply: String::new(), chunk_every: 1 }));

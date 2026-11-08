@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist>
-  <schema id="org.gnome.shell.extensions.sideagent" path="/org/gnome/shell/extensions/sideagent/">
+  <schema id="org.gnome.shell.extensions.aisle" path="/org/gnome/shell/extensions/aisle/">
     <key name="toggle-shortcut" type="as">
       <default>['&lt;Super&gt;&lt;Shift&gt;a']</default>
-      <summary>Toggle the sideagent panel</summary>
+      <summary>Toggle the aisle panel</summary>
     </key>
     <key name="attach-shortcut" type="as">
       <default>['&lt;Super&gt;&lt;Shift&gt;s']</default>

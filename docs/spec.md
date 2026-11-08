@@ -1,4 +1,4 @@
-# sideagent — Specification
+# aisle — Specification
 
 Version 0.1 · status: agreed in brainstorm, open questions listed at §13.
 Decisions with rationale live in [decisions.md](decisions.md); this file
@@ -66,8 +66,8 @@ delivers it.
 
 ### 3.3 Status & failure
 
-- If `sideagentd` is unreachable, the overlay says so plainly and offers
-  a one-line fix (`systemctl --user start sideagentd`). No silent failure.
+- If `aisled` is unreachable, the overlay says so plainly and offers
+  a one-line fix (`systemctl --user start aisled`). No silent failure.
 - Provider errors surface in-transcript as a distinct message style.
 - A tray-less indicator: the daemon writes a systemd journal line per
   capture (audit trail, see §10).
@@ -75,7 +75,7 @@ delivers it.
 ## 4. Architecture
 
 ```
-sideagentd (resident daemon)
+aisled (resident daemon)
 ├── agent-core (library crate, portable, no Linux-only deps)
 │   ├── providers/       OpenAI-compatible · Anthropic · (Ollama via compat)
 │   ├── session store    SQLite + image files
@@ -84,7 +84,7 @@ sideagentd (resident daemon)
 │   └── image pipeline   decode → cap → re-encode → base64
 ├── hotkeys/             X11 grab · portal GlobalShortcuts · (extension self-binds)
 ├── transport            D-Bus session-bus service (Linux)
-└── sideagentctl         CLI: ask · toggle · sessions · config
+└── aislectl         CLI: ask · toggle · sessions · config
 ```
 
 Frontends (separate artifacts, thin):
@@ -171,10 +171,10 @@ extension is documented for users who care.
 |---|---|---|---|
 | GNOME Wayland | A (pref) / C | extension schema keybind / portal / ctl | `org.gnome.Shell.Screenshot` |
 | GNOME X11 session | A / C | same | same |
-| KDE Plasma 6 (Wayland or X11) | B | portal `GlobalShortcuts`, else user custom shortcut → `sideagentctl toggle` | `org.kde.kwin.Screenshot`, fallback `spectacle -b -n` |
+| KDE Plasma 6 (Wayland or X11) | B | portal `GlobalShortcuts`, else user custom shortcut → `aislectl toggle` | `org.kde.kwin.Screenshot`, fallback `spectacle -b -n` |
 | Sway / Hyprland / Wayfire | B | user keybind in compositor config (`bindsym`), portal also available | `grim` binary or wlr-screencopy client |
 | i3 / bspwm / openbox / awesome (X11) | C | daemon `XGrabKey` on the configured chord | xcb root capture (`XGetImage`/composite) |
-| Other Wayland (rootless, exotic) | C | `sideagentctl toggle` bound by user | portal (prompts) |
+| Other Wayland (rootless, exotic) | C | `aislectl toggle` bound by user | portal (prompts) |
 
 ## 6. Hotkey subsystem
 
@@ -191,7 +191,7 @@ Ownership rules, so exactly one mechanism is live at a time:
    it (GNOME 42+, wlroots ≥1.7, KDE recent). The portal persists the
    binding in the DE; the daemon receives activation and emits
    `ToggleRequested` to the active frontend.
-4. **Universal fallback:** `sideagentctl toggle` is always available for
+4. **Universal fallback:** `aislectl toggle` is always available for
    users to bind in their DE settings. Documented per-DE with exact
    steps; it is not a second-class citizen — it's the guaranteed floor.
 
@@ -213,7 +213,7 @@ backend that answers a cheap probe.
 
 | Backend | How | Prompt? | Notes |
 |---|---|---|---|
-| gnome-shell | `org.gnome.Shell.Screenshot.Screenshot` → tmp PNG in `$XDG_RUNTIME_DIR/sideagent/` | **no — but restricted** | **GNOME ≥ ~47 restricts this API to the shell/portal itself (AccessDenied for third-party callers); verified on GNOME 50.6.** Backend kept for GNOME 40–46 and X11 sessions. On modern GNOME the prompt-free capture path is the Tier A extension (in-shell, writes the PNG and hands it to the daemon via `Ask{screenshot_path}`) or the portal (prompts). |
+| gnome-shell | `org.gnome.Shell.Screenshot.Screenshot` → tmp PNG in `$XDG_RUNTIME_DIR/aisle/` | **no — but restricted** | **GNOME ≥ ~47 restricts this API to the shell/portal itself (AccessDenied for third-party callers); verified on GNOME 50.6.** Backend kept for GNOME 40–46 and X11 sessions. On modern GNOME the prompt-free capture path is the Tier A extension (in-shell, writes the PNG and hands it to the daemon via `Ask{screenshot_path}`) or the portal (prompts). |
 | kwin | `org.kde.kwin.Screenshot` (Plasma 6 interface; version-probe) | **no** | Fallback: `spectacle -b -n -o` CLI. |
 | wlroots | spawn `grim -` (or wlr-screencopy client lib later) | **no** | grim is a hard dep on these DEs; document it. |
 | X11 | xcb: root window + composite redirect via `XGetImage`/`xcomposite` | **no** | Unredirected fullscreen games may capture black — acceptable v1. |
@@ -232,7 +232,7 @@ backend that answers a cheap probe.
 
 ## 8. Frontend protocol (D-Bus, v1 transport)
 
-Service `org.sideagent.Agent1`, object `/org/sideagent/Agent1`.
+Service `org.aisle.Agent1`, object `/org/aisle/Agent1`.
 Introspectable, standard bus policy (session bus = same user; fine).
 
 ### Methods
@@ -278,10 +278,10 @@ compatibility (§12).
 ### 9.1 Files
 
 ```
-~/.config/sideagent/config.toml        (0600; holds api_key for v1)
-~/.local/share/sideagent/sessions.db   SQLite (WAL)
-~/.local/share/sideagent/images/       content-addressed PNGs
-$XDG_RUNTIME_DIR/sideagent/            live captures (tmpfs, ephemeral)
+~/.config/aisle/config.toml        (0600; holds api_key for v1)
+~/.local/share/aisle/sessions.db   SQLite (WAL)
+~/.local/share/aisle/images/       content-addressed PNGs
+$XDG_RUNTIME_DIR/aisle/            live captures (tmpfs, ephemeral)
 ```
 
 ### 9.2 SQLite schema (v1)
@@ -300,7 +300,7 @@ No FTS in v1; session list is ordered by recency.
 
 - Captures are stored as originals under `images/` (sha256 name) and
   referenced from `attachments`; deleting a session deletes its rows
-  and unreferenced images (a `sideagentctl vacuum` reclaims).
+  and unreferenced images (a `aislectl vacuum` reclaims).
 - **Context assembly keeps only the last 2 images** in the outbound
   request; older messages ship text-only. This is a spec rule, not a
   heuristic — it bounds cost and is what every screen-aware chat has to
@@ -323,7 +323,7 @@ No FTS in v1; session list is ordered by recency.
   The overlay visibly shows what will be sent (thumbnail + dimensions).
 - No telemetry, no crash reporting, nothing leaves the machine except
   the configured provider call.
-- Journal audit line per capture: `sideagentd: captured 1920x1080 via
+- Journal audit line per capture: `aisled: captured 1920x1080 via
   gnome-shell for session 7f3a…`.
 - API key: v1 keeps it in `config.toml` (0600, user-owned) — documented
   clearly. Secret Service integration is a backlog item, not v1.
@@ -357,7 +357,7 @@ No FTS in v1; session list is ordered by recency.
 
 ## 13. Open questions (tracked)
 
-1. **Name.** "sideagent" is a working name; check for collisions on
+1. **Name.** "aisle" is a working name; check for collisions on
    crates.io/Flathub before publishing.
 2. **Focus return semantics** under Tier C — does the WM cooperate?
    Prototype in M2; worst case documented behavior is "focus stays in

@@ -114,3 +114,23 @@ over Unix socket / named pipe.
 **Consequences.** + GJS and Rust both have excellent D-Bus support —
 the two v1 frontend languages need no custom glue. − One more
 serialization boundary later; accepted cost of portability.
+
+## ADR-0010 — Rename project: sideagent → aisle, `psst` as CLI alias (Accepted)
+
+**Decision.** The project, binaries, and identifiers are renamed
+`aisle` (daemon `aisled`, CLI `aisle`, control `aislectl`, D-Bus
+`org.aisle.Agent1`, extension `org.aisle`). The binary is also
+installed as `psst` — same executable, invoked name picked from
+argv[0] — because "psst, what's the command for X" is exactly the
+speech act of the tool.
+
+**Why not `psst` as the real name.** "psst" is crowded in its own
+niche: a 9.5k-star Rust Spotify client, a 242-star "AI-native secrets
+manager", crates.io + PyPI squatters. "aisle" (free on crates.io,
+nothing on GitHub/Linux searches) is the unique, searchable brand;
+`psst` stays as the personality.
+
+**Migration.** config/data dirs move to `~/.config/aisle` /
+`~/.local/share/aisle`; loader honors old `sideagent` dirs and
+`SIDEAGENT_*` env as a one-release fallback; install.sh moves state,
+retires `sideagentd.service`, and swaps the extension UUID.

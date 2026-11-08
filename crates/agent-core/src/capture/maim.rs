@@ -43,7 +43,7 @@ impl ScreenCapture for Maim {
     }
 
     async fn capture(&self) -> Result<CapturedImage> {
-        let base = runtime_base().join("sideagent");
+        let base = runtime_base().join("aisle");
         std::fs::create_dir_all(&base).map_err(|e| Error::Capture(e.to_string()))?;
         let file: PathBuf = base.join(format!("cap-{}.png", uuid::Uuid::new_v4()));
 

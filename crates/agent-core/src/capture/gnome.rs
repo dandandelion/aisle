@@ -44,7 +44,7 @@ trait GnomeScreenshot {
 }
 
 fn runtime_dir() -> PathBuf {
-    runtime_base().join("sideagent")
+    runtime_base().join("aisle")
 }
 
 #[async_trait]

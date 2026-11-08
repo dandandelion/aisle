@@ -1,5 +1,5 @@
-// sideagent-gtk: Tier B frontend (spec §5) — a plain GTK4 window that talks
-// to sideagentd over D-Bus. Works on any desktop without a shell extension;
+// aisle-gtk: Tier B frontend (spec §5) — a plain GTK4 window that talks
+// to aisled over D-Bus. Works on any desktop without a shell extension;
 // capture rides the daemon's backends (portal included). Multi-line composer,
 // which the GNOME extension's St-18 cannot offer.
 //
@@ -20,9 +20,9 @@ use gtk::gdk;
 // ---------------------------------------------------------------- D-Bus ---
 
 #[zbus::proxy(
-    interface = "org.sideagent.Agent1",
-    default_service = "org.sideagent.Agent1",
-    default_path = "/org/sideagent/Agent1"
+    interface = "org.aisle.Agent1",
+    default_service = "org.aisle.Agent1",
+    default_path = "/org/aisle/Agent1"
 )]
 trait Agent1 {
     #[zbus(name = "Ask")]
@@ -202,7 +202,7 @@ impl State {
         if role == "system" { label.add_css_class("msg-system"); }
         let who = match role {
             "user" => "<span foreground=\"#7ee787\">❯ you</span>",
-            "assistant" => "<span foreground=\"#58a6ff\">❯ sideagent</span>",
+            "assistant" => "<span foreground=\"#58a6ff\">❯ aisle</span>",
             _ => "<span foreground=\"#8b949e\">·</span>",
         };
         label.set_markup(&format!("{who}\n{}", md_to_pango(text)));
@@ -277,7 +277,7 @@ impl State {
 
 fn build_ui(app: &gtk::Application, rt: tokio::runtime::Handle) {
     let win = gtk::ApplicationWindow::new(app);
-    win.set_title(Some("sideagent"));
+    win.set_title(Some("aisle"));
     win.set_default_size(440, 720);
 
     let panel = gtk::Box::builder().orientation(gtk::Orientation::Vertical).build();
@@ -287,7 +287,7 @@ fn build_ui(app: &gtk::Application, rt: tokio::runtime::Handle) {
     let header = gtk::HeaderBar::new();
     let title = gtk::Label::new(None);
     title.add_css_class("title-dot");
-    title.set_markup("<span foreground=\"#58a6ff\">●</span> <span foreground=\"#e6edf3\">sideagent</span>");
+    title.set_markup("<span foreground=\"#58a6ff\">●</span> <span foreground=\"#e6edf3\">aisle</span>");
     let model_chip = gtk::Label::builder().build();
     model_chip.add_css_class("model");
     let hbox = gtk::Box::builder().orientation(gtk::Orientation::Horizontal).spacing(8).build();
@@ -392,7 +392,7 @@ fn build_ui(app: &gtk::Application, rt: tokio::runtime::Handle) {
                     st.stream_buf.push_str(&text);
                     if let Some(lbl) = &st.stream_label {
                         lbl.set_markup(&format!(
-                            "<span foreground=\"#58a6ff\">❯ sideagent</span>\n{}",
+                            "<span foreground=\"#58a6ff\">❯ aisle</span>\n{}",
                             md_to_pango(&st.stream_buf)));
                         st.scroll_bottom();
                     }
@@ -540,7 +540,7 @@ fn main() -> anyhow::Result<()> {
 
     // CSS once the display exists (do it in startup)
     let app = gtk::Application::builder()
-        .application_id("org.sideagent.Gtk")
+        .application_id("org.aisle.Gtk")
         .build();
     app.connect_startup(|_| {
         if let Some(settings) = gtk::Settings::default() {

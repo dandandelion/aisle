@@ -1,4 +1,4 @@
-// sideagent extension preferences (runs in the separate prefs process,
+// aisle extension preferences (runs in the separate prefs process,
 // GTK4 + Adwaita). Shortcut changes apply live: the shell's keybinding
 // engine watches the GSettings keys we bind to.
 
@@ -11,7 +11,7 @@ export default class SideagentPrefs extends ExtensionPreferences {
         const settings = this.getSettings();
 
         const page = new Adw.PreferencePage({
-            title: 'sideagent',
+            title: 'aisle',
             icon_name: 'dialog-information-symbolic',
         });
 

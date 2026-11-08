@@ -1,4 +1,4 @@
-//! sideagentd — resident daemon: owns the Agent, serves the D-Bus API
+//! aisled — resident daemon: owns the Agent, serves the D-Bus API
 //! (spec §8), and exits cleanly on SIGTERM/SIGINT.
 
 use std::collections::HashMap;
@@ -14,7 +14,7 @@ pub struct Agent1Service {
     agent: std::sync::Arc<Agent>,
 }
 
-#[zbus::interface(name = "org.sideagent.Agent1")]
+#[zbus::interface(name = "org.aisle.Agent1")]
 impl Agent1Service {
     #[zbus(name = "Ask")]
     async fn ask(
@@ -107,7 +107,7 @@ async fn main() -> anyhow::Result<()> {
 
     let conn = Builder::session()?
         .name(BUS_NAME)
-        .context("acquiring bus name (is another sideagentd running?)")?
+        .context("acquiring bus name (is another aisled running?)")?
         .serve_at(OBJECT_PATH, Agent1Service { agent: agent.clone() })?
         .build()
         .await?;
@@ -116,7 +116,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!(
         version = env!("CARGO_PKG_VERSION"),
         status = ?agent.status(),
-        "sideagentd ready"
+        "aisled ready"
     );
 
     tokio::select! {

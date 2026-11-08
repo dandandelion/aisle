@@ -1,5 +1,5 @@
 [package]
-name = "sideagent-gtk"
+name = "aisle-gtk"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

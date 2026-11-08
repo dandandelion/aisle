@@ -135,7 +135,7 @@ impl Config {
     pub fn load_or_default() -> (Self, Option<String>) {
         match Self::load() {
             Ok(cfg) => (cfg, None),
-            Err(e) => (Self { provider: ProviderSection { api_key: std::env::var("SIDEAGENT_API_KEY").unwrap_or_default(), ..Default::default() }, ..Default::default() }, Some(e.to_string())),
+            Err(e) => (Self { provider: ProviderSection { api_key: Self::env_key(), ..Default::default() }, ..Default::default() }, Some(e.to_string())),
         }
     }
 
@@ -146,28 +146,49 @@ impl Config {
         let mut cfg: Config = toml::from_str(&text)
             .map_err(|e| Error::Config(format!("{}: {e}", path.display())))?;
         if cfg.provider.api_key.is_empty() {
-            if let Ok(k) = std::env::var("SIDEAGENT_API_KEY") {
-                cfg.provider.api_key = k;
-            }
+            cfg.provider.api_key = Self::env_key();
         }
         cfg.validate()?;
         Ok(cfg)
     }
 
+    /// AISLE_API_KEY, falling back to the pre-rename SIDEAGENT_API_KEY.
+    fn env_key() -> String {
+        std::env::var("AISLE_API_KEY")
+            .or_else(|_| std::env::var("SIDEAGENT_API_KEY"))
+            .unwrap_or_default()
+    }
+
     pub fn config_path() -> Result<PathBuf> {
-        if let Ok(p) = std::env::var("SIDEAGENT_CONFIG") {
+        if let Ok(p) = std::env::var("AISLE_CONFIG") {
+            return Ok(PathBuf::from(p));
+        }
+        if let Ok(p) = std::env::var("SIDEAGENT_CONFIG") { // pre-rename, still honored
             return Ok(PathBuf::from(p));
         }
         let base = dirs::config_dir().ok_or_else(|| Error::Config("no config dir".into()))?;
-        Ok(base.join("sideagent").join("config.toml"))
+        let path = base.join("aisle").join("config.toml");
+        let legacy = base.join("sideagent").join("config.toml"); // pre-rename dir
+        if !path.exists() && legacy.exists() {
+            return Ok(legacy);
+        }
+        Ok(path)
     }
 
     pub fn data_dir() -> Result<PathBuf> {
-        if let Ok(p) = std::env::var("SIDEAGENT_DATA") {
+        if let Ok(p) = std::env::var("AISLE_DATA") {
+            return Ok(PathBuf::from(p));
+        }
+        if let Ok(p) = std::env::var("SIDEAGENT_DATA") { // pre-rename, still honored
             return Ok(PathBuf::from(p));
         }
         let base = dirs::data_dir().ok_or_else(|| Error::Config("no data dir".into()))?;
-        Ok(base.join("sideagent"))
+        let dir = base.join("aisle");
+        let legacy = base.join("sideagent"); // pre-rename dir: sessions keep loading
+        if !dir.exists() && legacy.exists() {
+            return Ok(legacy);
+        }
+        Ok(dir)
     }
 
     fn validate(&self) -> Result<()> {

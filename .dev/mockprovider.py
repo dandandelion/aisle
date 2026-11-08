@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Mock OpenAI-compatible server for sideagent e2e tests.
+"""Mock OpenAI-compatible server for aisle e2e tests.
 Streams SSE chat completions; logs what it saw to stderr."""
 import json, sys, re
 from http.server import BaseHTTPRequestHandler, HTTPServer

@@ -1,4 +1,4 @@
-# Copy to ~/.config/sideagent/config.toml and chmod 600.
+# Copy to ~/.config/aisle/config.toml and chmod 600.
 # Fields per docs/spec.md §9.4.
 
 [provider]

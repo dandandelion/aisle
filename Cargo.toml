@@ -2,9 +2,9 @@
 resolver = "2"
 members = [
     "crates/agent-core",
-    "crates/sideagentd",
-    "crates/sideagentctl",
-    "crates/sideagent-gtk",
+    "crates/aisled",
+    "crates/aislectl",
+    "crates/aisle-gtk",
 ]
 
 [workspace.package]
@@ -21,7 +21,7 @@ serde_json = "1"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
 zbus = { version = "5", features = ["tokio"] }
-clap = { version = "4", features = ["derive"] }
+clap = { version = "4", features = ["derive", "string"] }
 thiserror = "2"
 anyhow = "1"
 tracing = "0.1"

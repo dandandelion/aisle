@@ -1,4 +1,4 @@
-//! sideagentctl — thin CLI over the daemon's D-Bus API. Doubles as the test
+//! aislectl — thin CLI over the daemon's D-Bus API. Doubles as the test
 //! harness and the universal hotkey fallback (spec §6.4).
 
 use std::collections::HashMap;
@@ -10,9 +10,9 @@ use futures::StreamExt;
 use zbus::proxy;
 
 #[proxy(
-    interface = "org.sideagent.Agent1",
-    default_service = "org.sideagent.Agent1",
-    default_path = "/org/sideagent/Agent1"
+    interface = "org.aisle.Agent1",
+    default_service = "org.aisle.Agent1",
+    default_path = "/org/aisle/Agent1"
 )]
 trait Agent1 {
     #[zbus(name = "Ask")]
@@ -47,7 +47,7 @@ trait Agent1 {
 }
 
 #[derive(Parser)]
-#[command(name = "sideagentctl", about = "talk to sideagentd")]
+#[command(name = "aislectl", about = "talk to aisled")]
 struct Cli {
     #[command(subcommand)]
     cmd: Cmd,
@@ -106,9 +106,9 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
     let conn = zbus::Connection::session()
         .await
-        .context("no session bus: is sideagentd running (systemctl --user status sideagentd)?")?;
+        .context("no session bus: is aisled running (systemctl --user status aisled)?")?;
     let proxy = Agent1Proxy::new(&conn).await.context(
-        "cannot reach org.sideagent.Agent1: start the daemon (systemctl --user start sideagentd)",
+        "cannot reach org.aisle.Agent1: start the daemon (systemctl --user start aisled)",
     )?;
 
     match cli.cmd {

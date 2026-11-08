@@ -33,7 +33,7 @@ impl ScreenCapture for Grim {
 
     async fn capture(&self) -> Result<CapturedImage> {
         let grim = grim_path().ok_or_else(|| Error::Capture("grim not installed".into()))?;
-        let dir = runtime_base().join("sideagent");
+        let dir = runtime_base().join("aisle");
         std::fs::create_dir_all(&dir).map_err(|e| Error::Capture(e.to_string()))?;
         let file = dir.join(format!("cap-{}.png", uuid::Uuid::new_v4()));
 

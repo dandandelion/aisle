@@ -1,9 +1,9 @@
 [Unit]
-Description=sideagent resident agent daemon
+Description=aisle resident agent daemon
 PartOf=graphical-session.target
 
 [Service]
-ExecStart=%h/.local/lib/sideagent/sideagentd
+ExecStart=%h/.local/lib/aisle/aisled
 Restart=on-failure
 RestartSec=2
 

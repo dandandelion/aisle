@@ -1,4 +1,9 @@
-# sideagent (working name)
+# aisle
+
+*formerly sideagent, renamed 2026-11-08.* `aisle` is the project and command;
+**`psst` is a shell alias** for `aisle` (same binary, two names) — `psst list
+the files` and `aisle list the files` are identical. The name sits in the
+"aisle beside your screen" sense: a quiet panel at the side, one hotkey away.
 
 A minimal, hotkey-away AI side panel for Linux. One global hotkey opens a
 floating overlay on the edge of your screen — it never takes over your
@@ -8,9 +13,9 @@ screenshot of your actual screen as context.
 
 > Status: **M0 + M1 shipped and live-tested; M4 (GNOME extension)
 > verified headless end-to-end, awaiting one logout to activate on the
-> real session.** `sideagentd` runs as a systemd user service now
-> (degraded until `~/.config/sideagent/config.toml` exists — run
-> `sideagentctl status` to see the hint). Build order + acceptance
+> real session.** `aisled` runs as a systemd user service now
+> (degraded until `~/.config/aisle/config.toml` exists — run
+> `aislectl status` to see the hint). Build order + acceptance
 > criteria in [docs/plan.md](docs/plan.md); rationale in
 > [docs/decisions.md](docs/decisions.md).
 
@@ -18,7 +23,7 @@ screenshot of your actual screen as context.
 
 ```
 ┌──────────────────────────────┐
-│  sideagentd (resident, Rust) │   all real logic, portable
+│  aisled (resident, Rust) │   all real logic, portable
 │  chat sessions · providers   │
 │  screen capture · image pipe │
 │  D-Bus service               │
@@ -43,36 +48,36 @@ other OSes later" an honest statement rather than a hope.
 | KDE Plasma (Wayland/X11) | GTK4 + `gtk4-layer-shell` | portal `GlobalShortcuts` / user shortcut | `org.kde.kwin.Screenshot` |
 | wlroots — Sway, Hyprland, Wayfire | GTK4 + `gtk4-layer-shell` | compositor keybind / portal `GlobalShortcuts` | `grim` (wlr-screencopy) |
 | X11 window managers — i3, bspwm, openbox, awesome | GTK4 X11 window (`keep-above` + sticky + positioned) | daemon `XGrabKey` (xcb) | xcb root-window capture |
-| GNOME without the extension | GTK4 window, WM-decided position (helper extension optional) | portal / `sideagentctl toggle` | `org.gnome.Shell.Screenshot` |
-| Anything else Wayland | GTK4 window | `sideagentctl toggle` bound by user | xdg-desktop-portal (prompts — last resort) |
+| GNOME without the extension | GTK4 window, WM-decided position (helper extension optional) | portal / `aislectl toggle` | `org.gnome.Shell.Screenshot` |
+| Anything else Wayland | GTK4 window | `aislectl toggle` bound by user | xdg-desktop-portal (prompts — last resort) |
 
 ## Try it (current state)
 
 ```bash
 # daemon (already installed + enabled on this box):
-sideagentctl status                       # degraded until configured
-mkdir -p ~/.config/sideagent && cp config.example.toml ~/.config/sideagent/config.toml
-$EDITOR ~/.config/sideagent/config.toml   # set provider.model + api_key
-chmod 600 ~/.config/sideagent/config.toml
-systemctl --user restart sideagentd
-sideagentctl ask --screen "what is this?" # terminal chat with screen context
+aislectl status                       # degraded until configured
+mkdir -p ~/.config/aisle && cp config.example.toml ~/.config/aisle/config.toml
+$EDITOR ~/.config/aisle/config.toml   # set provider.model + api_key
+chmod 600 ~/.config/aisle/config.toml
+systemctl --user restart aisled
+aislectl ask --screen "what is this?" # terminal chat with screen context
 
 # overlay (GNOME extension — needs ONE logout for GNOME 50 to load it):
-gnome-extensions enable org.sideagent     # after next login
+gnome-extensions enable org.aisle     # after next login
 # Super+Shift+A toggle · Super+Shift+S attach-screen · Esc close
 
 # live-tune the composer prompt (reopen panel to apply):
-gsettings set org.gnome.shell.extensions.sideagent prompt-y 6
+gsettings set org.gnome.shell.extensions.aisle prompt-y 6
 
-# side-ask — quick question right from the terminal (no quotes needed):
-side-ask how do I undo the last git commit      # brief: just the command
-side-ask -e how do I undo the last git commit   # teach: answer + why + a tip
-side-ask -c but what if i already pushed it     # follow-up, same conversation
-side-ask how do I clean up old docker images    # in a terminal, each suggestion is
+# aisle — quick question right from the terminal (no quotes needed):
+aisle how do I undo the last git commit      # brief: just the command
+aisle -e how do I undo the last git commit   # teach: answer + why + a tip
+aisle -c but what if i already pushed it     # follow-up, same conversation
+aisle how do I clean up old docker images    # in a terminal, each suggestion is
                                                 # offered to RUN (Y/n); failures can
                                                 # be diagnosed+fixed — -R disables this
-git log --oneline -50 | side-ask which of these is the release commit
-side-ask --screen what app is drawing this window
+git log --oneline -50 | aisle which of these is the release commit
+aisle --screen what app is drawing this window
 ```
 
 ## Documentation map

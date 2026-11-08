@@ -1,7 +1,7 @@
-// sideagent GNOME Shell extension — Tier A frontend (spec §5).
+// aisle GNOME Shell extension — Tier A frontend (spec §5).
 // An edge-anchored overlay on the shell stage: hotkey, capture, and
 // always-on-top come for free from living inside the compositor.
-// Talks to sideagentd over the session bus (spec §8); holds no state.
+// Talks to aisled over the session bus (spec §8); holds no state.
 
 import GObject from 'gi://GObject';
 import Gio from 'gi://Gio';
@@ -15,9 +15,9 @@ import Pango from 'gi://Pango';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 
-const BUS = 'org.sideagent.Agent1';
-const OBJ = '/org/sideagent/Agent1';
-const IFACE = 'org.sideagent.Agent1';
+const BUS = 'org.aisle.Agent1';
+const OBJ = '/org/aisle/Agent1';
+const IFACE = 'org.aisle.Agent1';
 
 // ---------- tiny helpers ----------
 
@@ -66,31 +66,31 @@ class Panel {
 
         this._root = new St.BoxLayout({
             vertical: true,
-            style_class: 'sideagent-panel',
+            style_class: 'aisle-panel',
             reactive: true,
             can_focus: true,
         });
 
         // header
-        const header = new St.BoxLayout({ style_class: 'sideagent-header' });
+        const header = new St.BoxLayout({ style_class: 'aisle-header' });
         const title = new St.Label({ y_align: Clutter.ActorAlign.CENTER });
-        title.clutter_text.set_markup('<span foreground="#58a6ff">●</span> <span foreground="#e6edf3">sideagent</span>');
+        title.clutter_text.set_markup('<span foreground="#58a6ff">●</span> <span foreground="#e6edf3">aisle</span>');
         header.add_child(title);
-        this._modelChip = new St.Label({ text: '', style_class: 'sideagent-model', y_align: Clutter.ActorAlign.CENTER });
+        this._modelChip = new St.Label({ text: '', style_class: 'aisle-model', y_align: Clutter.ActorAlign.CENTER });
         header.add_child(this._modelChip);
         const spacer = new St.Label({ text: '', x_expand: true });
         header.add_child(spacer);
 
-        this._attachBtn = new St.Button({ style_class: 'sideagent-button', label: '📎', toggleMode: true });
+        this._attachBtn = new St.Button({ style_class: 'aisle-button', label: '📎', toggleMode: true });
         this._attachBtn.add_tooltip?.('attach screen to next message');
         header.add_child(this._attachBtn);
 
-        const newBtn = new St.Button({ style_class: 'sideagent-button', label: '＋' });
+        const newBtn = new St.Button({ style_class: 'aisle-button', label: '＋' });
         newBtn.add_tooltip?.('new session');
         newBtn.connect('clicked', () => this._newSession());
         header.add_child(newBtn);
 
-        const closeBtn = new St.Button({ style_class: 'sideagent-button', label: '✕' });
+        const closeBtn = new St.Button({ style_class: 'aisle-button', label: '✕' });
         closeBtn.connect('clicked', () => this.close());
         header.add_child(closeBtn);
         this._root.add_child(header);
@@ -103,7 +103,7 @@ class Panel {
         });
         this._transcript = new St.BoxLayout({
             vertical: true,
-            style_class: 'sideagent-transcript',
+            style_class: 'aisle-transcript',
             x_align: Clutter.ActorAlign.FILL,
         });
         scroll.add_child(this._transcript);
@@ -111,20 +111,20 @@ class Panel {
         this._root.add_child(scroll);
 
         // status line
-        this._status = new St.Label({ style_class: 'sideagent-status', text: '' });
+        this._status = new St.Label({ style_class: 'aisle-status', text: '' });
         this._root.add_child(this._status);
 
         // input row: terminal prompt glyph + entry
         // (GNOME 50's St dropped multi-line text widgets; v1 input is
         // single-line. Multi-line is backlog.)
-        const inputRow = new St.BoxLayout({ style_class: 'sideagent-input-row' });
-        this._entry = new St.Entry({ style_class: 'sideagent-input', x_expand: true });
+        const inputRow = new St.BoxLayout({ style_class: 'aisle-input-row' });
+        this._entry = new St.Entry({ style_class: 'aisle-input', x_expand: true });
         // prompt chevron as the entry's own primary icon: centered by
         // St.Entry internals, correct at any HiDPI scale — no layout games
         this._prompt = new St.Icon({
             icon_name: 'go-next-symbolic',
             icon_size: 14,
-            style_class: 'symbolic sideagent-prompt',
+            style_class: 'symbolic aisle-prompt',
         });
         this._entry.set_primary_icon(this._prompt);
         this._entry.clutter_text.connect('activate', () => this._send());
@@ -133,9 +133,9 @@ class Panel {
         this._root.add_child(inputRow);
 
         const hint = new St.Label({
-            style_class: 'sideagent-status',
+            style_class: 'aisle-status',
             text: 'Enter send · Esc close',
-            style_class: 'sideagent-hint',
+            style_class: 'aisle-hint',
         });
         this._root.add_child(hint);
 
@@ -275,7 +275,7 @@ class Panel {
                     try {
                         this._onSignal(sig, data.deep_unpack());
                     } catch (e) {
-                        logError(e, 'sideagent signal');
+                        logError(e, 'aisle signal');
                     }
                 });
             this._sigIds.push(id);
@@ -473,11 +473,11 @@ class Panel {
         stream.close(null);
         const bytes = stream.steal_as_bytes();
 
-        const dir = GLib.build_filenamev([GLib.get_user_runtime_dir(), 'sideagent']);
+        const dir = GLib.build_filenamev([GLib.get_user_runtime_dir(), 'aisle']);
         GLib.mkdir_with_parents(dir, 0o700);
         const path = GLib.build_filenamev([dir, `ext-${Date.now()}.png`]);
         GLib.file_set_contents(path, bytes.get_data());
-        log(`sideagent: captured screen -> ${path}`);
+        log(`aisle: captured screen -> ${path}`);
         return path;
     }
 
@@ -487,10 +487,10 @@ class Panel {
         const who = role === 'user'
             ? '<span foreground="#7ee787">❯ you</span>'
             : role === 'assistant'
-                ? '<span foreground="#58a6ff">❯ sideagent</span>'
+                ? '<span foreground="#58a6ff">❯ aisle</span>'
                 : '<span foreground="#8b949e">·</span>';
         const label = new St.Label({
-            style_class: `sideagent-msg sideagent-msg-${role}`,
+            style_class: `aisle-msg aisle-msg-${role}`,
             x_align: Clutter.ActorAlign.FILL,
             x_expand: true,
         });
@@ -515,7 +515,7 @@ class Panel {
 
 export default class SideagentExtension extends Extension {
     enable() {
-        log('sideagent: extension build 2026-11-07.1845');
+        log('aisle: extension build 2026-11-08.rename');
         const width = this.getSettings().get_int('panel-width');
         this._panel = new Panel(width, this.getSettings());
 
@@ -548,9 +548,9 @@ export default class SideagentExtension extends Extension {
         // announce ourselves; daemon suppresses other frontends
         try {
             const ok = dbusCall('RegisterFrontend', '(s)', ['extension']);
-            log(`sideagent: frontend registered (active=${ok})`);
+            log(`aisle: frontend registered (active=${ok})`);
         } catch (e) {
-            log(`sideagent: daemon not reachable: ${e.message || e}`);
+            log(`aisle: daemon not reachable: ${e.message || e}`);
         }
     }
 

@@ -6,3 +6,4 @@
 /.dev/*
 !/.dev/*.sh
 !/.dev/mockprovider.py
+*.zip

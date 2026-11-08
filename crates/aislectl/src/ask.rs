@@ -1,13 +1,13 @@
-//! side-ask — quick questions straight from the terminal.
+//! aisle — quick questions straight from the terminal.
 //!
-//!   side-ask what was the command to list listening sockets again
-//!   side-ask -e  explain ffmpeg concat while I'm at it
-//!   side-ask -r  how do I clean up old docker images   # offers to RUN it (Y/n)
-//!   git log --oneline -50 | side-ask "any of these look like the release commit?"
+//!   aisle what was the command to list listening sockets again
+//!   aisle -e  explain ffmpeg concat while I'm at it
+//!   aisle -r  how do I clean up old docker images   # offers to RUN it (Y/n)
+//!   git log --oneline -50 | aisle "any of these look like the release commit?"
 //!
 //! Default style is *brief* (just the answer); `-e/--explain` asks for a
 //! compact explanation + a memorable tip. Each run opens its own titled
-//! session; `-c/--continue` reuses the previous side-ask session for
+//! session; `-c/--continue` reuses the previous aisle session for
 //! follow-ups. In a terminal, every suggested command comes with an
 //! offer-to-execute prompt (Y/n) — the model never runs anything you don't
 //! approve; `-R/--no-run` disables offers, `-r` stays as explicit opt-in.
@@ -16,14 +16,14 @@ use std::collections::HashMap;
 use std::io::{IsTerminal, Read, Write};
 
 use anyhow::{bail, Context, Result};
-use clap::Parser;
+use clap::{CommandFactory, FromArgMatches, Parser};
 use futures::StreamExt;
 use zbus::proxy;
 
 #[proxy(
-    interface = "org.sideagent.Agent1",
-    default_service = "org.sideagent.Agent1",
-    default_path = "/org/sideagent/Agent1"
+    interface = "org.aisle.Agent1",
+    default_service = "org.aisle.Agent1",
+    default_path = "/org/aisle/Agent1"
 )]
 trait Agent1 {
     #[zbus(name = "Ask")]
@@ -46,7 +46,7 @@ trait Agent1 {
 }
 
 #[derive(Parser)]
-#[command(name = "side-ask", about = "Ask sideagent from the terminal.", version)]
+#[command(about = "Ask aisle from the terminal (also invocable as `psst`).", version)]
 struct Cli {
     /// The question. Quote it, or just type the words — they get joined.
     /// Use "-" (or no args with piped stdin) to read the question from stdin.
@@ -57,12 +57,12 @@ struct Cli {
     #[arg(short = 'e', long)]
     explain: bool,
 
-    /// Continue the last side-ask conversation (keeps context for follow-ups).
+    /// Continue the last aisle conversation (keeps context for follow-ups).
     #[arg(short = 'c', long)]
     cont: bool,
 
     /// Kept for explicitness: execution offers are already the default when
-    /// side-ask runs in a terminal. (See --no-run.)
+    /// aisle runs in a terminal. (See --no-run.)
     #[arg(short = 'r', long)]
     run: bool,
 
@@ -87,8 +87,20 @@ struct Cli {
     no_context: bool,
 }
 
-fn main() -> Result<()> {
-    let cli = Cli::parse();
+/// Invoked name: "aisle" or "psst" (same binary, two names).
+fn bin_name() -> String {
+    // argv[0] keeps the invoked name; current_exe() would resolve the
+    // psst symlink and always say "aisle".
+    std::env::args()
+        .next()
+        .and_then(|a| std::path::Path::new(&a).file_stem().map(|s| s.to_string_lossy().into_owned()))
+        .unwrap_or_else(|| "aisle".into())
+}
+
+pub fn main() -> Result<()> {
+    let mut cmd = Cli::command();
+    cmd = cmd.name(bin_name());
+    let cli = Cli::from_arg_matches(&cmd.get_matches())?;
     let question = compose_question(&cli)?;
 
     let rt = tokio::runtime::Builder::new_current_thread()
@@ -113,7 +125,7 @@ fn compose_question(cli: &Cli) -> Result<String> {
         q.push_str(&stdin_text);
     }
     if q.trim().is_empty() {
-        bail!("nothing to ask. e.g.: side-ask how do I undo the last git commit?\n(pipes work too: `some-cmd | side-ask ...`)");
+        bail!("nothing to ask. e.g.: aisle how do I undo the last git commit?\n(pipes work too: `some-cmd | aisle ...`)");
     }
     Ok(q)
 }
@@ -150,7 +162,7 @@ fn env_context() -> String {
             }
         }
     }
-    lines.push("IMPORTANT: this is side-ask — any command you output in a code \
+    lines.push("IMPORTANT: this is aisle — any command you output in a code \
         fence is OFFERED to the user for immediate execution (they confirm each \
         one with Y/n, and failed runs can be sent back to you to diagnose). So if \
         the user asks you to do something, DO it by outputting the command — \
@@ -158,7 +170,7 @@ fn env_context() -> String {
     lines.join("\n")
 }
 
-/// The shell actually running side-ask (not $SHELL, which is the login
+/// The shell actually running aisle (not $SHELL, which is the login
 /// shell). Unix: parent process name via /proc. Windows: env heuristics.
 fn detect_shell() -> Option<String> {
     #[cfg(unix)]
@@ -171,7 +183,7 @@ fn detect_shell() -> Option<String> {
             .to_string();
         let comm = std::fs::read_to_string(format!("/proc/{ppid}/comm")).ok()?;
         let comm = comm.trim().to_string();
-        // side-ask launched via a wrapper (sh -c, cargo run…) — fall back
+        // aisle launched via a wrapper (sh -c, cargo run…) — fall back
         // to $SHELL unless the parent looks like a real shell.
         const SHELLS: [&str; 8] = ["bash", "zsh", "fish", "sh", "dash", "nu", "tcsh", "csh"];
         if SHELLS.contains(&comm.as_str()) {
@@ -196,15 +208,15 @@ fn detect_shell() -> Option<String> {
 
 async fn run(cli: Cli, question: String) -> Result<()> {
     let conn = zbus::Connection::session().await
-        .context("no session bus: is sideagentd running (systemctl --user status sideagentd)?")?;
+        .context("no session bus: is aisled running (systemctl --user status aisled)?")?;
     let proxy = Agent1Proxy::new(&conn).await.context(
-        "cannot reach org.sideagent.Agent1: start the daemon (systemctl --user start sideagentd)",
+        "cannot reach org.aisle.Agent1: start the daemon (systemctl --user start aisled)",
     )?;
 
-    // Session: fresh titled session per run; -c reuses the last side-ask one.
+    // Session: fresh titled session per run; -c reuses the last aisle one.
     let data_dir = agent_core::config::Config::data_dir()?;
     std::fs::create_dir_all(&data_dir).ok();
-    let marker = data_dir.join("side-ask.session");
+    let marker = data_dir.join("aisle.session");
 
     let mut session_note = None;
     let session_id = if cli.cont {
@@ -213,7 +225,7 @@ async fn run(cli: Cli, question: String) -> Result<()> {
         if live {
             saved
         } else {
-            session_note = Some("no previous side-ask session — starting a new one");
+            session_note = Some("no previous aisle session — starting a new one");
             proxy.new_session(&session_title(&question), "").await?
         }
     } else {
@@ -296,7 +308,7 @@ async fn run(cli: Cli, question: String) -> Result<()> {
                             let u = body.usage();
                             if !cli.quiet {
                                 note(&format!(
-                                    "{} · {} ms · {}/{} tok{} · session {} (side-ask -c to continue)",
+                                    "{} · {} ms · {}/{} tok{} · session {} ({} -c to continue)",
                                     u.get("model").map(String::as_str).unwrap_or("?"),
                                     u.get("ms").map(String::as_str).unwrap_or("?"),
                                     u.get("in").map(String::as_str).unwrap_or("?"),
@@ -305,6 +317,7 @@ async fn run(cli: Cli, question: String) -> Result<()> {
                                         " · ⚠ TRUNCATED at cap — raise provider.max_tokens"
                                     } else { "" },
                                     short(&session_id),
+                                    bin_name(),
                                 ));
                             }
                             break 0;
@@ -479,7 +492,7 @@ fn clip(s: &str, max: usize) -> String {
 fn session_title(question: &str) -> String {
     let t: String = question.chars().take(60).collect();
     let t: String = t.chars().map(|c| if c == '\n' { ' ' } else { c }).collect();
-    format!("side-ask: {t}")
+    format!("aisle: {t}")
 }
 
 fn short(id: &str) -> String {

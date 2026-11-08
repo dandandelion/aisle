@@ -7,12 +7,12 @@ use crate::provider::{ChatMessage, ChatRequest, ContentPart};
 use crate::store::Msg;
 
 pub const SYSTEM_PROMPT: &str = "\
-You are sideagent, a concise assistant available as an overlay on the user's \
+You are aisle, a concise assistant available as an overlay on the user's \
 Linux desktop. When a screenshot is attached, it shows the user's current \
 screen; reference visible content directly. Be brief; use markdown for code. \
 If a question does not need the screen, answer from knowledge.";
 
-/// Per-request answer styles (side-ask --brief / --explain). Injected into
+/// Per-request answer styles (aisle --brief / --explain). Injected into
 /// the system message of *this* request only — never persisted, so other
 /// frontends see the plain question in history.
 pub fn style_note(style: &str) -> Option<&'static str> {

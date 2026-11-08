@@ -18,9 +18,9 @@ use crate::image;
 use crate::provider::{self, Provider, ProviderEvent, Usage};
 use crate::store::{Msg, SessionInfo, Store};
 
-pub const BUS_NAME: &str = "org.sideagent.Agent1";
-pub const OBJECT_PATH: &str = "/org/sideagent/Agent1";
-pub const INTERFACE: &str = "org.sideagent.Agent1";
+pub const BUS_NAME: &str = "org.aisle.Agent1";
+pub const OBJECT_PATH: &str = "/org/aisle/Agent1";
+pub const INTERFACE: &str = "org.aisle.Agent1";
 
 const HISTORY_TAIL: usize = 200;
 const DELTA_BATCH_INTERVAL: Duration = Duration::from_millis(50);
@@ -82,7 +82,7 @@ impl Agent {
 
     /// Test wiring: inject store + provider, no bus, no capture.
     pub fn for_test(cfg: Config, store: Store, provider: Arc<dyn Provider>) -> Arc<Self> {
-        Self::make(cfg, None, store, Some(provider), Vec::new(), std::env::temp_dir().join("sideagent-test-data"))
+        Self::make(cfg, None, store, Some(provider), Vec::new(), std::env::temp_dir().join("aisle-test-data"))
     }
 
     pub fn set_conn(&self, conn: Connection) {
@@ -108,7 +108,7 @@ impl Agent {
     fn provider_for(&self, name: Option<&str>) -> Result<Arc<dyn Provider>> {
         let default = || -> Result<Arc<dyn Provider>> {
             self.provider.clone().ok_or_else(|| Error::Provider(format!(
-                "no provider configured ({}); edit ~/.config/sideagent/config.toml",
+                "no provider configured ({}); edit ~/.config/aisle/config.toml",
                 self.config_error.as_deref().unwrap_or("api_key empty")
             )))
         };

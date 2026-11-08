@@ -1,4 +1,4 @@
-//! agent-core: portable sideagent logic. No UI, no Linux-only deps outside
+//! agent-core: portable aisle logic. No UI, no Linux-only deps outside
 //! the `capture` module (cfg(unix)). See docs/spec.md.
 
 pub mod agent;

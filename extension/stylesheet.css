@@ -1,6 +1,6 @@
-/* sideagent — terminal theme (GNOME 50 St CSS) */
+/* aisle — terminal theme (GNOME 50 St CSS) */
 
-.sideagent-panel {
+.aisle-panel {
   background-color: #0d1117;
   border-left: 1px solid #30363d;
   border-top-left-radius: 10px;
@@ -11,7 +11,7 @@
   color: #c9d1d9;
 }
 
-.sideagent-header {
+.aisle-header {
   spacing: 6px;
   padding: 2px 2px 10px 2px;
   border-bottom: 1px solid #21262d;
@@ -19,35 +19,35 @@
   font-weight: bold;
 }
 
-.sideagent-model {
+.aisle-model {
   color: #8b949e;
   font-size: 11px;
   font-weight: normal;
 }
 
-.sideagent-transcript {
+.aisle-transcript {
   spacing: 10px;
   padding: 10px 2px;
 }
 
-.sideagent-msg {
+.aisle-msg {
   padding: 0;
 }
 
-.sideagent-msg-user {
+.aisle-msg-user {
   color: #7ee787;
 }
 
-.sideagent-msg-assistant {
+.aisle-msg-assistant {
   color: #c9d1d9;
 }
 
-.sideagent-msg-system {
+.aisle-msg-system {
   color: #8b949e;
   font-style: italic;
 }
 
-.sideagent-input-row {
+.aisle-input-row {
   spacing: 8px;
   background-color: #161b22;
   border: 1px solid #30363d;
@@ -56,14 +56,14 @@
   margin-top: 8px;
 }
 
-.sideagent-prompt {
+.aisle-prompt {
   color: #58a6ff;
   font-weight: bold;
   font-size: 15px;
   margin-top: 3px; /* optical: the ❯ glyph sits high in its line box */
 }
 
-.sideagent-input {
+.aisle-input {
   background-color: transparent;
   border: none;
   color: #e6edf3;
@@ -72,7 +72,7 @@
   caret-color: #58a6ff;
 }
 
-.sideagent-button {
+.aisle-button {
   border-radius: 6px;
   padding: 3px 9px;
   margin: 0 2px;
@@ -82,24 +82,24 @@
   font-size: 13px;
 }
 
-.sideagent-button:hover {
+.aisle-button:hover {
   background-color: #30363d;
   border-color: #8b949e;
 }
 
-.sideagent-button:checked {
+.aisle-button:checked {
   background-color: #1f6feb;
   color: #ffffff;
   border-color: #58a6ff;
 }
 
-.sideagent-status {
+.aisle-status {
   color: #8b949e;
   font-size: 11px;
   padding: 4px 2px 0 2px;
 }
 
-.sideagent-hint {
+.aisle-hint {
   color: #484f58;
   font-size: 10px;
   padding: 6px 2px 0 2px;

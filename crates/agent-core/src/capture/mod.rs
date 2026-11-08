@@ -74,9 +74,9 @@ pub fn no_backend_error() -> Error {
     Error::Capture("no working capture backend on this system (see docs/spec.md §7)".into())
 }
 
-/// Where live captures land: SIDEAGENT_RUNTIME > XDG_RUNTIME_DIR > temp.
+/// Where live captures land: AISLE_RUNTIME > XDG_RUNTIME_DIR > temp.
 pub fn runtime_base() -> std::path::PathBuf {
-    std::env::var("SIDEAGENT_RUNTIME")
+    std::env::var("AISLE_RUNTIME")
         .map(std::path::PathBuf::from)
         .or_else(|_| std::env::var("XDG_RUNTIME_DIR").map(std::path::PathBuf::from))
         .unwrap_or_else(|_| std::env::temp_dir())
