@@ -402,7 +402,10 @@ fn build_ui(app: &gtk::Application, rt: tokio::runtime::Handle) {
                     st.current_req.clear();
                     st.stream_label = None;
                     st.stream_buf.clear();
-                    st.set_status(&format!("✓ {} ms · {}→{} tok · {}",
+                    let trunc = if usage.get("truncated").map(|v| v == "true").unwrap_or(false) {
+                        " · ⚠ cut at token cap — raise provider.max_tokens"
+                    } else { "" };
+                    st.set_status(&format!("✓ {} ms · {}→{} tok · {}{trunc}",
                         usage.get("ms").cloned().unwrap_or_default(),
                         usage.get("in").cloned().unwrap_or_default(),
                         usage.get("out").cloned().unwrap_or_default(),

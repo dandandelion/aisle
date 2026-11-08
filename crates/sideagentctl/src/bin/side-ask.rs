@@ -296,11 +296,14 @@ async fn run(cli: Cli, question: String) -> Result<()> {
                             let u = body.usage();
                             if !cli.quiet {
                                 note(&format!(
-                                    "{} · {} ms · {}/{} tok · session {} (side-ask -c to continue)",
+                                    "{} · {} ms · {}/{} tok{} · session {} (side-ask -c to continue)",
                                     u.get("model").map(String::as_str).unwrap_or("?"),
                                     u.get("ms").map(String::as_str).unwrap_or("?"),
                                     u.get("in").map(String::as_str).unwrap_or("?"),
                                     u.get("out").map(String::as_str).unwrap_or("?"),
+                                    if u.get("truncated").map(|v| v == "true").unwrap_or(false) {
+                                        " · ⚠ TRUNCATED at cap — raise provider.max_tokens"
+                                    } else { "" },
                                     short(&session_id),
                                 ));
                             }

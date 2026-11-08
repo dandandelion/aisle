@@ -156,6 +156,13 @@ impl Provider for Anthropic {
                         if let Some(u) = v.get("usage") {
                             usage.output_tokens = u.get("output_tokens").and_then(|x| x.as_u64()).unwrap_or(0);
                         }
+                        if v.get("delta")
+                            .and_then(|d| d.get("stop_reason"))
+                            .and_then(|s| s.as_str())
+                            == Some("max_tokens")
+                        {
+                            usage.truncated = true;
+                        }
                     }
                     "error" => {
                         let msg = v

@@ -6,6 +6,9 @@ kind = "openai"                      # "openai" (compatible) | "anthropic"
 # base_url = "https://api.openai.com/v1"
 model = "gpt-4o"
 api_key = "sk-..."
+max_tokens = 8192                    # output cap; reasoning models spend a lot
+                                     # here — answers ending mid-sentence with a
+                                     # ⚠ TRUNCATED note mean raise this
 
 # Optional extra providers, selectable per request with --provider NAME
 # [provider.named.ollama]

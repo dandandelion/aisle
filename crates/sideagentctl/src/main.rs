@@ -178,11 +178,13 @@ async fn main() -> Result<()> {
                             let (ref rid, u) = (body.request_id().clone(), body.usage().clone());
                             if **rid == *request_id {
                                 println!();
-                                eprintln!("[done in {} ms · in {} / out {} tok · {}]",
+                                eprintln!("[done in {} ms · in {} / out {} tok · {}{}]{}",
                                     u.get("ms").map(String::as_str).unwrap_or("?"),
                                     u.get("in").map(String::as_str).unwrap_or("?"),
                                     u.get("out").map(String::as_str).unwrap_or("?"),
-                                    u.get("model").map(String::as_str).unwrap_or("?"));
+                                    u.get("model").map(String::as_str).unwrap_or("?"),
+                                    if u.get("cap").is_some() { format!(" · cap {}", u["cap"]) } else { String::new() },
+                                    if u.get("truncated").map(|v| v == "true").unwrap_or(false) { " · ⚠ TRUNCATED" } else { "" });
                                 break;
                             }
                         }

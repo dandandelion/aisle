@@ -68,6 +68,7 @@ fn section(kind: &str, base_url: String) -> ProviderSection {
         base_url: Some(base_url),
         model: "test-model".into(),
         api_key: "test-key".into(),
+        max_tokens: 8192,
         named: Default::default(),
     }
 }
@@ -79,7 +80,7 @@ async fn collect(p: &dyn Provider, req: ChatRequest) -> (String, Vec<(String, St
     while let Some(ev) = stream.next().await {
         match ev {
             ProviderEvent::TextDelta(t) => text.push_str(&t),
-            ProviderEvent::Done(u) => events.push(("done".into(), format!("{}|{}", u.input_tokens, u.output_tokens))),
+            ProviderEvent::Done(u) => events.push(("done".into(), format!("{}|{}|{}", u.input_tokens, u.output_tokens, u.truncated))),
             ProviderEvent::Error { kind, message } => events.push((kind, message)),
             ProviderEvent::ToolCall { .. } => events.push(("tool".into(), String::new())),
         }
@@ -120,7 +121,7 @@ async fn openai_compat_wire_and_stream() {
     let p = provider::openai::OpenAiCompat::new(&section("openai", base)).unwrap();
     let (text, events) = collect(&p, req_with_image()).await;
     assert_eq!(text, "Hello");
-    assert_eq!(events, vec![("done".into(), "11|2".into())]);
+    assert_eq!(events, vec![("done".into(), "11|2|false".into())]);
 
     let request = rx.recv().unwrap();
     assert!(request.contains("POST /chat/completions HTTP/1.1"));
@@ -165,7 +166,7 @@ async fn anthropic_wire_and_stream() {
     let p = provider::anthropic::Anthropic::new(&section("anthropic", base)).unwrap();
     let (text, events) = collect(&p, req_with_image()).await;
     assert_eq!(text, "Hi there");
-    assert_eq!(events, vec![("done".into(), "7|2".into())]);
+    assert_eq!(events, vec![("done".into(), "7|2|false".into())]);
 
     let request = rx.recv().unwrap();
     assert!(request.contains("POST /v1/messages HTTP/1.1"));
@@ -177,4 +178,33 @@ async fn anthropic_wire_and_stream() {
     assert_eq!(v["messages"].as_array().unwrap().len(), 1);
     assert_eq!(v["messages"][0]["content"][1]["type"], "image");
     assert_eq!(v["messages"][0]["content"][1]["source"]["type"], "base64");
+}
+
+#[tokio::test]
+async fn openai_length_finish_reason_flags_truncation() {
+    let sse = concat!(
+        "data: {\"choices\":[{\"delta\":{\"content\":\"half an \"}}]}\n\n",
+        "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"length\"}]}\n\n",
+        "data: [DONE]\n\n",
+    );
+    let (base, _rx) = mock_sse_server("200 OK", &[("content-type", "text/event-stream")], sse);
+    let p = provider::openai::OpenAiCompat::new(&section("openai", base)).unwrap();
+    let (text, events) = collect(&p, req_with_image()).await;
+    assert_eq!(text, "half an ");
+    assert_eq!(events, vec![("done".into(), "0|0|true".into())]);
+}
+
+#[tokio::test]
+async fn anthropic_max_tokens_stop_reason_flags_truncation() {
+    let sse = concat!(
+        "data: {\"type\":\"message_start\",\"message\":{\"usage\":{\"input_tokens\":7}}}\n\n",
+        "data: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"cu\"}}\n\n",
+        "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"max_tokens\"},\"usage\":{\"output_tokens\":9}}\n\n",
+        "data: {\"type\":\"message_stop\"}\n\n",
+    );
+    let (base, _rx) = mock_sse_server("200 OK", &[("content-type", "text/event-stream")], sse);
+    let p = provider::anthropic::Anthropic::new(&section("anthropic", base)).unwrap();
+    let (text, events) = collect(&p, req_with_image()).await;
+    assert_eq!(text, "cu");
+    assert_eq!(events, vec![("done".into(), "7|9|true".into())]);
 }

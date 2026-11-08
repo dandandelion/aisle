@@ -131,6 +131,16 @@ impl Provider for OpenAiCompat {
                     usage.input_tokens = u.get("prompt_tokens").and_then(|x| x.as_u64()).unwrap_or(0);
                     usage.output_tokens = u.get("completion_tokens").and_then(|x| x.as_u64()).unwrap_or(0);
                 }
+                if let Some(fr) = v
+                    .get("choices")
+                    .and_then(|c| c.get(0))
+                    .and_then(|c| c.get("finish_reason"))
+                    .and_then(|f| f.as_str())
+                {
+                    if fr == "length" {
+                        usage.truncated = true;
+                    }
+                }
                 if let Some(err) = v.get("error") {
                     yield ProviderEvent::Error {
                         kind: "provider".into(),

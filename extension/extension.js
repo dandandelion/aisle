@@ -334,7 +334,7 @@ class Panel {
                 this._currentReq = null;
                 this._streamLabel = null;
                 const u = usage instanceof Map ? Object.fromEntries(usage) : usage;
-                this._setStatus(`✓ ${u.ms} ms · ${u.in}→${u.out} tok · ${u.model}`);
+                this._setStatus(`✓ ${u.ms} ms · ${u.in}→${u.out} tok · ${u.model}${u.truncated === 'true' ? ' · ⚠ cut at token cap — raise provider.max_tokens' : ''}`);
                 if (this._selftestShot) {
                     this._selftestShot = false;
                     this._entry.set_text('Hjkl typ| test'); // exercise composer layout in shot

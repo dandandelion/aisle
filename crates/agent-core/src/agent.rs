@@ -125,6 +125,7 @@ impl Agent {
             base_url: section.base_url.clone(),
             model: section.model.clone(),
             api_key: section.api_key.clone(),
+            max_tokens: self.cfg.provider.max_tokens, // cap is global
             named: Default::default(),
         })?;
         guard.insert(name.into(), p.clone());
@@ -363,7 +364,16 @@ async fn run_answer(
         }
     };
 
-    let req = context::build_request(&model, &history, &images, &agent.cfg.image, style.as_deref(), context.as_deref());
+    let req = context::build_request(
+        &model,
+        &history,
+        &images,
+        &agent.cfg.image,
+        style.as_deref(),
+        context.as_deref(),
+        agent.cfg.provider.max_tokens,
+    );
+    let cap = req.max_tokens;
     let started = Instant::now();
     let mut stream = provider.stream(req);
 
@@ -418,6 +428,10 @@ async fn run_answer(
     u.insert("out".into(), usage.output_tokens.to_string());
     u.insert("ms".into(), started.elapsed().as_millis().to_string());
     u.insert("model".into(), model);
+    u.insert("cap".into(), cap.to_string());
+    if usage.truncated {
+        u.insert("truncated".into(), "true".into());
+    }
     agent.emit("Done", &(request_id, u)).await;
     agent.emit("SessionChanged", &(&session_id,)).await;
 }

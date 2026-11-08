@@ -42,6 +42,9 @@ pub struct ChatRequest {
 pub struct Usage {
     pub input_tokens: u64,
     pub output_tokens: u64,
+    /// true when the provider cut the answer at the token cap
+    /// (OpenAI finish_reason="length", Anthropic stop_reason="max_tokens").
+    pub truncated: bool,
 }
 
 #[derive(Debug, Clone)]

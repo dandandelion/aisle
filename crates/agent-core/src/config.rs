@@ -29,6 +29,10 @@ pub struct ProviderSection {
     pub base_url: Option<String>,
     pub model: String,
     pub api_key: String,
+    /// Output token cap per request. Reasoning-heavy models spend most of
+    /// this on thinking; answers cut mid-sentence mean this is too low
+    /// (truncation is flagged in the UI when it happens).
+    pub max_tokens: u32,
     /// Extra named providers so one config can hold several, e.g.
     /// [provider.named.ollama] kind="openai" base_url="http://localhost:11434/v1" …
     /// selected per-session with SetModel / --provider.
@@ -109,6 +113,7 @@ impl Default for ProviderSection {
             base_url: None,
             model: "gpt-4o".into(),
             api_key: String::new(),
+            max_tokens: 8192,
             named: BTreeMap::new(),
         }
     }
@@ -210,6 +215,7 @@ max_edge = 1200
         assert_eq!(cfg.image.keep_images_last, 2);
         assert_eq!(cfg.provider.named["claude"].kind, "anthropic");
         assert_eq!(cfg.ui.panel_width, 420);
+        assert_eq!(cfg.provider.max_tokens, 8192); // default survives partial sections
     }
 
     #[test]
