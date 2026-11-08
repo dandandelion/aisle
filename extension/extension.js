@@ -189,6 +189,11 @@ class Panel {
         this._entry.grab_key_focus();
         this._startPulse();
         this._setStatus('connecting…');
+        // re-announce on every open: survives daemon restarts (registration
+        // lives only in the daemon's memory)
+        try {
+            dbusCall('RegisterFrontend', '(s)', ['extension']);
+        } catch (_) { /* daemon down; ensureSession below reports it */ }
         this._ensureSession().catch(e => this._setStatus(`daemon unreachable: ${e.message || e}`));
         this._refreshModelChip();
     }

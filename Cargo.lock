@@ -2031,6 +2031,7 @@ dependencies = [
  "clap",
  "futures",
  "tokio",
+ "uuid",
  "zbus",
 ]
 

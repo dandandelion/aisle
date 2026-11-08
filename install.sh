@@ -10,7 +10,11 @@ cargo build --release
 
 echo "==> installing binaries to $PREFIX"
 mkdir -p "$PREFIX"
-cp target/release/sideagentd target/release/sideagentctl "$PREFIX/"
+cp target/release/sideagentd target/release/sideagentctl target/release/side-ask "$PREFIX/"
+# put the user-facing commands on PATH (~/.local/bin is on PATH on most distros)
+mkdir -p "$HOME/.local/bin"
+ln -sf "$PREFIX/sideagentctl" "$HOME/.local/bin/sideagentctl"
+ln -sf "$PREFIX/side-ask" "$HOME/.local/bin/side-ask"
 
 echo "==> systemd user service"
 mkdir -p "$HOME/.config/systemd/user"

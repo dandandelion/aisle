@@ -63,6 +63,13 @@ gnome-extensions enable org.sideagent     # after next login
 
 # live-tune the composer prompt (reopen panel to apply):
 gsettings set org.gnome.shell.extensions.sideagent prompt-y 6
+
+# side-ask — quick question right from the terminal (no quotes needed):
+side-ask how do I undo the last git commit      # brief: just the command
+side-ask -e how do I undo the last git commit   # teach: answer + why + a tip
+side-ask -c but what if i already pushed it     # follow-up, same conversation
+git log --oneline -50 | side-ask which of these is the release commit
+side-ask --screen what app is drawing this window
 ```
 
 ## Documentation map

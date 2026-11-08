@@ -70,6 +70,12 @@ enum Cmd {
         /// Attach an existing PNG instead of capturing (e.g. extension-captured).
         #[arg(long = "screenshot-file")]
         screenshot_file: Option<String>,
+        /// Answer style: just the direct answer, no prose.
+        #[arg(long)]
+        brief: bool,
+        /// Answer style: answer + explanation + a memorable tip.
+        #[arg(long, conflicts_with = "brief")]
+        explain: bool,
     },
     /// Create a new session and print its id.
     New {
@@ -106,7 +112,7 @@ async fn main() -> Result<()> {
     )?;
 
     match cli.cmd {
-        Cmd::Ask { text, session, model, provider, attach_screen, screenshot_file } => {
+        Cmd::Ask { text, session, model, provider, attach_screen, screenshot_file, brief, explain } => {
             let session_id = match session {
                 Some(s) => s,
                 None => {
@@ -130,6 +136,11 @@ async fn main() -> Result<()> {
             }
             if let Some(f) = screenshot_file {
                 opts.insert("screenshot_path".into(), f);
+            }
+            if brief {
+                opts.insert("style".into(), "brief".into());
+            } else if explain {
+                opts.insert("style".into(), "explain".into());
             }
 
             // subscribe BEFORE Ask so no signal can slip past us
