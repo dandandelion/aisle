@@ -86,7 +86,13 @@ class Panel {
             toggleMode: true,
             child: new St.Icon({ icon_name: 'video-display-symbolic', style_class: 'aisle-attach-icon' }),
         });
-        this._attachBtn.set_tooltip_text('Use screen as context');
+        // GNOME 50 dropped Clutter's set_tooltip_text; St has add_tooltip
+        // there. Feature-detect so neither version can kill the panel.
+        const tip = 'Use screen as context';
+        if (typeof this._attachBtn.add_tooltip === 'function')
+            this._attachBtn.add_tooltip(tip);
+        else if (typeof this._attachBtn.set_tooltip_text === 'function')
+            this._attachBtn.set_tooltip_text(tip);
         header.add_child(this._attachBtn);
 
         const newBtn = new St.Button({ style_class: 'aisle-button', label: '＋' });
@@ -520,7 +526,7 @@ class Panel {
 
 export default class SideagentExtension extends Extension {
     enable() {
-        log('aisle: extension build 2026-11-09.hotkeys');
+        log('aisle: extension build 2026-11-09.hotkeys2');
         const width = this.getSettings().get_int('panel-width');
         this._panel = new Panel(width, this.getSettings());
 
